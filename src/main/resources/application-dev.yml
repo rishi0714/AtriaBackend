@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/campus_platform?TimeZone=Asia/Kolkata
+    username: campus_user
+    password: campus_pass
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8081
+  address: 0.0.0.0
+
+logging:
+  level:
+    com.campus.platform: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web.servlet.resource: OFF
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 1MB
+      max-request-size: 1MB
