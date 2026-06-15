@@ -30,6 +30,7 @@ public class ClubMapper {
                         club.getManagedBy().getEmail() : null)  // ← was userId + fullName
                 .description(club.getDescription())
                 .logoUrl(club.getLogoUrl())
+                .isActive(club.isActive())
                 .createdAt(club.getCreatedAt())
                 .updatedAt(club.getUpdatedAt())
                 .build();

@@ -1,15 +1,19 @@
 package com.campus.platform.common.service;
 
 import com.campus.platform.registration.entity.Registration;
+import com.campus.platform.registration.repository.RegistrationRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -17,10 +21,16 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
     private final QrCodeService qrCodeService;
+    private final RegistrationRepository registrationRepository;
 
     @Async
-    public void sendRegistrationEmail(Registration registration) {
+    public void sendRegistrationEmail(UUID registrationId) {
         try {
+            Registration registration = registrationRepository
+                    .findByIdWithDetails(registrationId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Registration not found: " + registrationId));
+
             byte[] qrBytes = qrCodeService.generateQrBytes(registration.getQrCode());
 
             MimeMessage message = mailSender.createMimeMessage();
@@ -135,13 +145,15 @@ public class EmailService {
                     registration.getEvent().getClub().getName()
             ), true);
 
-            // This line was missing — embeds the QR image
             helper.addInline("qrcode", new ByteArrayResource(qrBytes), "image/png");
 
             mailSender.send(message);
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to send registration email", e);
+            // Log instead of throwing — async exceptions are swallowed anyway
+            // Replace with your logger if you have one
+            System.err.println("Failed to send registration email: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

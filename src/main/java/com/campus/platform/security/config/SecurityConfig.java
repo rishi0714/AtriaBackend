@@ -39,7 +39,7 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // ← was IF_REQUIRED
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
@@ -54,16 +54,13 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/api/auth/refresh", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )
 
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(auth -> auth
-                                // Explicitly use HTTP session to persist the OAuth2
-                                // state parameter across the Google redirect round-trip.
-                                // Without this, STATELESS-adjacent behaviour drops the
-                                // state and causes authorization_request_not_found.
                                 .authorizationRequestRepository(
                                         new HttpSessionOAuth2AuthorizationRequestRepository())
                         )
@@ -105,10 +102,11 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://localhost:5173",
                 "http://192.168.0.141:5173",
-                "https://outspoken-uphill-zone.ngrok-free.dev"
+                "https://outspoken-uphill-zone.ngrok-free.dev",
+                "https://molehill-humid-unstirred.ngrok-free.dev"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Refresh-Token"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 

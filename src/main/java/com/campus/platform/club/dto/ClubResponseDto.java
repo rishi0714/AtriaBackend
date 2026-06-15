@@ -20,6 +20,7 @@ public class ClubResponseDto {
     private String managedByEmail;  // ← was managedByUserId + managedByName
     private String description;
     private String logoUrl;
+    private boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -20,7 +20,7 @@ public class UserResponseDto {
     private String fullName;
     private String pictureUrl;
     private UserRole role;
-    private Short   year;
+    private Short year;
     private String phoneNumber;
     private String registrationNumber;
     private String  stream;

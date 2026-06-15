@@ -1,5 +1,6 @@
 package com.campus.platform.user.controller;
 
+import com.campus.platform.common.util.SecurityContextUtil;
 import com.campus.platform.user.dto.AssignCollegeAdminDto;
 import com.campus.platform.user.dto.CompleteGuestProfileDto;
 import com.campus.platform.user.dto.UserResponseDto;
@@ -10,7 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import com.campus.platform.common.util.SecurityContextUtil;
 
 import java.util.List;
 import java.util.UUID;
@@ -35,13 +35,6 @@ public class UserController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserResponseDto> getMyProfile() {
         return ResponseEntity.ok(userService.getUserById(SecurityContextUtil.currentUserId()));
-    }
-
-    @GetMapping("/college/students")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<UserResponseDto>> getStudentsByCollege() {
-        UUID collegeId = SecurityContextUtil.currentCollegeId();
-        return ResponseEntity.ok(userService.getUsersByCollege(collegeId));
     }
 
     @GetMapping("/platform/colleges/{collegeId}/admins")
@@ -77,5 +70,22 @@ public class UserController {
     @PreAuthorize("hasRole('PLATFORM_OWNER')")
     public ResponseEntity<Long> getUserCountByCollegeName(@RequestParam String collegeName) {
         return ResponseEntity.ok(userService.getUserCountByCollegeName(collegeName));
+    }
+
+    @GetMapping("/platform/colleges/{collegeId}/users/count")
+    @PreAuthorize("hasRole('PLATFORM_OWNER')")
+    public ResponseEntity<Long> getUserCountByCollege(
+            @PathVariable UUID collegeId) {
+
+        return ResponseEntity.ok(
+                userService.getUserCountByCollege(collegeId)
+        );
+    }
+    @GetMapping("/college/admins")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<List<UserResponseDto>> getAdminsByCollege() {
+        UUID collegeId = SecurityContextUtil.currentCollegeId();
+        List<UserResponseDto> admins = userService.getAdminsByCollege(collegeId);
+        return ResponseEntity.ok(admins);
     }
 }

@@ -29,15 +29,9 @@ public class ClubController {
     @PreAuthorize("hasAnyRole('STUDENT', 'CLUB_ADMIN')")
     public ResponseEntity<List<ClubResponseDto>> getClubsForStudent() {
         UUID collegeId = SecurityContextUtil.currentCollegeId();
-        return ResponseEntity.ok(clubService.getClubsByCollege(collegeId));
+        return ResponseEntity.ok(clubService.getClubsByCollege(collegeId)); // active only
     }
 
-    @GetMapping("/api/club/analytics")
-    @PreAuthorize("hasRole('CLUB_ADMIN')")
-    public ResponseEntity<ClubAnalyticsDto> getClubAnalytics() { // ← remove @AuthenticationPrincipal param
-        UUID userId = SecurityContextUtil.currentUserId();        // ← consistent with rest of codebase
-        return ResponseEntity.ok(analyticsService.getClubAnalytics(userId));
-    }
 
     // COLLEGE_ADMIN: full CRUD over clubs in their college
     @PostMapping("/api/college/clubs")
@@ -73,6 +67,17 @@ public class ClubController {
         return ResponseEntity.ok(clubService.updateClub(clubId, collegeId, dto));
     }
 
+    @GetMapping("/api/club/analytics")
+    @PreAuthorize("hasRole('CLUB_ADMIN')")
+    public ResponseEntity<ClubAnalyticsDto> getClubAnalytics() {
+
+        UUID userId = SecurityContextUtil.currentUserId();
+
+        return ResponseEntity.ok(
+                analyticsService.getClubAnalytics(userId)
+        );
+    }
+
     // Only COLLEGE_ADMIN can assign who runs a club
     @PatchMapping("/api/college/clubs/{clubId}/admin")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
@@ -90,5 +95,39 @@ public class ClubController {
         UUID collegeId = SecurityContextUtil.currentCollegeId();        // ← read from context
         clubService.deleteClub(clubId, collegeId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/api/college/clubs/{clubId}/deactivate")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<ClubResponseDto> deactivateClub(@PathVariable UUID clubId) {
+        UUID collegeId = SecurityContextUtil.currentCollegeId();
+        return ResponseEntity.ok(clubService.deactivateClub(clubId, collegeId));
+    }
+
+    @PatchMapping("/api/college/clubs/{clubId}/activate")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<ClubResponseDto> activateClub(@PathVariable UUID clubId) {
+        UUID collegeId = SecurityContextUtil.currentCollegeId();
+        return ResponseEntity.ok(clubService.activateClub(clubId, collegeId));
+    }
+
+    @GetMapping("/api/platform/colleges/{collegeId}/clubs/count")
+    @PreAuthorize("hasRole('PLATFORM_OWNER')")
+    public ResponseEntity<Long> getClubCountByCollege(
+            @PathVariable UUID collegeId) {
+
+        return ResponseEntity.ok(
+                clubService.getClubCountByCollege(collegeId)
+        );
+    }
+
+    @GetMapping("/api/platform/colleges/{collegeId}/clubs")
+    @PreAuthorize("hasRole('PLATFORM_OWNER')")
+    public ResponseEntity<List<ClubResponseDto>> getClubsByCollegeForPlatform(
+            @PathVariable UUID collegeId) {
+
+        return ResponseEntity.ok(
+                clubService.getClubsByCollege(collegeId)
+        );
     }
 }

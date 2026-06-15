@@ -67,6 +67,11 @@ public class ClubService {
         club.setManagedBy(newAdmin);
         return clubMapper.toResponseDto(clubRepository.save(club));
     }
+    @Transactional(readOnly = true)
+    public long getClubCountByCollege(UUID collegeId) {
+        collegeService.findCollegeOrThrow(collegeId); // optional validation
+        return clubRepository.countByCollege_CollegeId(collegeId);
+    }
 
     @Transactional
     public void deleteClub(UUID clubId, UUID collegeId) {
@@ -76,6 +81,20 @@ public class ClubService {
         if (previous != null) {
             demoteIfUnassigned(previous);
         }
+    }
+
+    @Transactional
+    public ClubResponseDto deactivateClub(UUID clubId, UUID collegeId) {
+        Club club = findClubInTenantOrThrow(clubId, collegeId);
+        club.setActive(false);
+        return clubMapper.toResponseDto(clubRepository.save(club));
+    }
+
+    @Transactional
+    public ClubResponseDto activateClub(UUID clubId, UUID collegeId) {
+        Club club = findClubInTenantOrThrow(clubId, collegeId);
+        club.setActive(true);
+        return clubMapper.toResponseDto(clubRepository.save(club));
     }
 
     @Transactional(readOnly = true)
@@ -117,19 +136,30 @@ public class ClubService {
      * and auto-promotes them to CLUB_ADMIN if they are currently a STUDENT.
      */
     private User resolveAndPromoteClubAdmin(String email, UUID collegeId) {
-        User user = userService.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "User not found with email: " + email));
+        College college = collegeService.findCollegeOrThrow(collegeId);
 
-        if (!user.belongsToCollege(collegeId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "User does not belong to your college.");
-        }
-
-        if (user.getRole() == UserRole.COLLEGE_ADMIN || user.getRole() == UserRole.PLATFORM_OWNER) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "User has a higher role and cannot be assigned as club admin.");
-        }
+        User user = userRepository.findByEmail(email.toLowerCase())
+                .map(existing -> {
+                    // Must belong to this college
+                    if (!existing.belongsToCollege(collegeId)) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                                "User does not belong to your college.");
+                    }
+                    // Can't demote a higher role
+                    if (existing.getRole() == UserRole.COLLEGE_ADMIN
+                            || existing.getRole() == UserRole.PLATFORM_OWNER) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "User has a higher role and cannot be assigned as club admin.");
+                    }
+                    return existing;
+                })
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .email(email.toLowerCase())
+                        .fullName("")
+                        .role(UserRole.STUDENT)   // will be promoted below
+                        .college(college)
+                        .profileComplete(false)
+                        .build()));
 
         if (clubRepository.existsByManagedBy_UserId(user.getUserId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -160,5 +190,12 @@ public class ClubService {
         return clubRepository.findByClubIdAndCollege_CollegeId(clubId, collegeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Club not found or does not belong to this college."));
+    }
+
+    public List<ClubResponseDto> getAllClubsForAdmin(UUID collegeId) {
+        return clubRepository.findAllByCollege_CollegeId(collegeId)
+                .stream()
+                .map(clubMapper::toResponseDto)
+                .collect(Collectors.toList());
     }
 }

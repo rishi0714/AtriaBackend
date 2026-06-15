@@ -11,8 +11,6 @@ import java.util.UUID;
 @Repository
 public interface ClubRepository extends JpaRepository<Club, UUID> {
 
-    List<Club> findAllByCollege_CollegeId(UUID collegeId);
-
     Optional<Club> findByClubIdAndCollege_CollegeId(UUID clubId, UUID collegeId);
 
     boolean existsByCollege_CollegeIdAndName(UUID collegeId, String name);
@@ -20,6 +18,10 @@ public interface ClubRepository extends JpaRepository<Club, UUID> {
     boolean existsByManagedBy_UserId(UUID userId);
 
     Optional<Club> findByManagedBy_UserId(UUID userId);
+
+    List<Club> findAllByCollege_CollegeIdAndIsActiveTrue(UUID collegeId);
+
+    List<Club> findAllByCollege_CollegeId(UUID collegeId);
 
     long countByCollege_CollegeId(UUID collegeId); // ← for college admin dashboard
 

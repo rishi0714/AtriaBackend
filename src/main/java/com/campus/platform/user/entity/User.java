@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -61,6 +62,10 @@ public class User {
     @Builder.Default
     private boolean profileComplete = false;
 
+    // User.java — just add this one field
+    @Column(name = "refresh_token", length = 512)
+    private String refreshToken;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -73,4 +78,6 @@ public class User {
     public boolean belongsToCollege(UUID collegeId) {
         return this.college != null && this.college.getCollegeId().equals(collegeId);
     }
+
+
 }

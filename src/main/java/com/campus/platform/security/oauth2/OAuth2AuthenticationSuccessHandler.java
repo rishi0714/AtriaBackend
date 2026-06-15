@@ -2,7 +2,9 @@ package com.campus.platform.security.oauth2;
 
 import com.campus.platform.security.jwt.JwtTokenProvider;
 import com.campus.platform.user.entity.User;
+import com.campus.platform.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final JwtTokenProvider jwtTokenProvider;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
     @Value("${app.oauth2.redirect-uri:}")
     private String frontendRedirectUri;
@@ -45,26 +48,34 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         CustomOAuth2User oAuth2User = (CustomOAuth2User) authentication.getPrincipal();
         User user = oAuth2User.getResolvedUser();
 
-        String token = jwtTokenProvider.generateToken(
+        String accessToken = jwtTokenProvider.generateToken(
                 user.getUserId(),
                 user.getEmail(),
                 user.getRole(),
                 user.getCollege() != null ? user.getCollege().getCollegeId() : null
         );
 
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getUserId());
+        user.setRefreshToken(refreshToken);
+        userRepository.save(user);
+
+        // ← removed: Set-Cookie header entirely
+
         log.info("JWT issued for userId: {}, role: {}", user.getUserId(), user.getRole());
 
         if (frontendRedirectUri != null && !frontendRedirectUri.isBlank()) {
-            // SPA flow: redirect to frontend with token in query param
-            String redirectUrl = frontendRedirectUri + "?token=" + token;
+            // ← both tokens in redirect URL
+            String redirectUrl = frontendRedirectUri
+                    + "?token=" + accessToken
+                    + "&refreshToken=" + refreshToken;
             getRedirectStrategy().sendRedirect(request, response, redirectUrl);
         } else {
-            // API/dev flow: return token as JSON
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setStatus(HttpServletResponse.SC_OK);
 
             Map<String, Object> responseBody = new HashMap<>();
-            responseBody.put("token", token);
+            responseBody.put("token", accessToken);
+            responseBody.put("refreshToken", refreshToken);  // ← add this
             responseBody.put("userId", user.getUserId().toString());
             responseBody.put("email", user.getEmail());
             responseBody.put("role", user.getRole().name());

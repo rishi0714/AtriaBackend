@@ -50,6 +50,10 @@ public class Club {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private boolean isActive = true;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

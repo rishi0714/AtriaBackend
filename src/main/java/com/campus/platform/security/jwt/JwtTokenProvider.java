@@ -106,6 +106,41 @@ public class JwtTokenProvider {
         return false;
     }
 
+    @Value("${app.jwt.refresh-expiration-ms:1800000}") // 30 min default
+    private long refreshExpirationMs;
+
+    // Refresh token — minimal payload, NO role
+    public String generateRefreshToken(UUID userId) {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(userId.toString())
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + refreshExpirationMs))
+                .signWith(privateKey, Jwts.SIG.RS256)  // same RS256 key
+                .compact();
+    }
+
+    public UUID extractUserIdFromRefreshToken(String token) {
+        return UUID.fromString(
+                Jwts.parser()
+                        .verifyWith(publicKey)
+                        .build()
+                        .parseSignedClaims(token)
+                        .getPayload()
+                        .getSubject()
+        );
+    }
+
+    public boolean validateRefreshToken(String token) {
+        try {
+            Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token);
+            return true;
+        } catch (Exception e) {
+            log.warn("Refresh token invalid: {}", e.getMessage());
+            return false;
+        }
+    }
+
     // ── Claim extractors ─────────────────────────────────────────────────────────
 
     public UUID extractUserId(String token) {

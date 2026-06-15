@@ -113,9 +113,11 @@ public class AnalyticsService {
             // Tally stream/year breakdowns from the already-loaded registration rows
             for (Registration reg : registrations) {
                 String stream = reg.getUser().getStream();
-                String year   = String.valueOf(reg.getUser().getYear());
+                String year = (reg.getUser().getYear() != null && reg.getUser().getYear() > 0)
+                        ? "Year " + reg.getUser().getYear()
+                        : "Unknown";
                 categoryCount.merge(stream != null ? stream : "Other", 1, Integer::sum);
-                yearCount.merge(year, 1, Integer::sum);
+                yearCount.merge(year, 1, Integer::sum); // ← keep only this one
             }
         }
 
@@ -147,9 +149,11 @@ public class AnalyticsService {
 
         for (Registration reg : registrations) {
             String stream = reg.getUser().getStream();
-            String year   = String.valueOf(reg.getUser().getYear());
+            String year = (reg.getUser().getYear() != null && reg.getUser().getYear() > 0)
+                    ? "Year " + reg.getUser().getYear()
+                    : "Unknown";
             categoryCount.merge(stream != null ? stream : "Other", 1, Integer::sum);
-            yearCount.merge(year, 1, Integer::sum);
+            yearCount.merge(year, 1, Integer::sum); // ← keep only this one
         }
 
         List<KpiData> kpis = List.of(

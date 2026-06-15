@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -33,7 +35,6 @@ public class RegistrationService {
     private final EventService eventService;
     private final AttendanceRepository attendanceRepository;
     private final EmailService emailService;
-
 
     @Transactional
     public RegistrationResponseDto registerForEvent(UUID userId, UUID eventId) {
@@ -67,24 +68,19 @@ public class RegistrationService {
 
         Registration saved = registrationRepository.save(registration);
 
-        // Send email with QR image + .ics calendar attachment
-        emailService.sendRegistrationEmail(saved);
+        // Fire email AFTER the transaction commits so the async thread
+        // can re-fetch the fully persisted row with a fresh session
+        UUID savedId = saved.getRegistrationId();
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        emailService.sendRegistrationEmail(savedId);
+                    }
+                }
+        );
 
         return registrationMapper.toResponseDto(saved);
-    }
-
-    @Transactional(readOnly = true)
-    public List<RegistrationResponseDto> getParticipantsForEvent(UUID eventId) {
-        List<Registration> registrations = registrationRepository
-                .findAllByEvent_EventIdAndIsCancelledFalse(eventId);
-
-        Set<UUID> attendedIds = attendanceRepository
-                .findRegistrationIdsByEvent(eventId); // ← single bulk query
-
-        return registrations.stream()
-                .map(r -> registrationMapper.toResponseDto(r,
-                        attendedIds.contains(r.getRegistrationId())))
-                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -103,7 +99,6 @@ public class RegistrationService {
         registrationRepository.save(registration);
     }
 
-    // Add this method to RegistrationService.java
     @Transactional
     public void cancelByEventId(UUID eventId, UUID userId) {
         Registration registration = registrationRepository
@@ -119,9 +114,6 @@ public class RegistrationService {
         registration.setCancelled(true);
         registrationRepository.save(registration);
     }
-
-
-
 
     // ── Internal helpers ────────────────────────────────────────────────────────
 
@@ -141,7 +133,6 @@ public class RegistrationService {
                     "Registration deadline has passed.");
         }
 
-        // College check — guest or cross-college student can only register for open events
         boolean sameCollege = user.getCollege() != null &&
                 user.getCollege().getCollegeId()
                         .equals(event.getCollege().getCollegeId());
@@ -166,6 +157,22 @@ public class RegistrationService {
                 .findAllByUser_UserIdAndIsCancelledFalse(userId);
 
         Set<UUID> attendedIds = attendanceRepository.findRegistrationIdsByUser(userId);
+
+        return registrations.stream()
+                .map(r -> registrationMapper.toResponseDto(r,
+                        attendedIds.contains(r.getRegistrationId())))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RegistrationResponseDto> getParticipantsForEvent(UUID eventId) {
+
+        // one query instead of two separate ones
+        List<Registration> registrations = registrationRepository
+                .findParticipantsWithDetails(eventId);
+
+        Set<UUID> attendedIds = attendanceRepository
+                .findRegistrationIdsByEvent(eventId);
 
         return registrations.stream()
                 .map(r -> registrationMapper.toResponseDto(r,

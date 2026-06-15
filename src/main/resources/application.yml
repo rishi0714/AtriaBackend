@@ -23,7 +23,7 @@ spring:
         format_sql: true
 
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration
     baseline-on-migrate: false
 
@@ -69,13 +69,15 @@ app:
   platform-owner-name: ${PLATFORM_OWNER_NAME:Rishi}
 
   oauth2:
-    redirect-uri: "https://outspoken-uphill-zone.ngrok-free.dev/auth/callback"
+    redirect-uri: "https://molehill-humid-unstirred.ngrok-free.dev/auth/callback"
+
 
   cors:
     allowed-origins:
       - "http://localhost:5173"
       - "http://192.168.0.141:5173"
       - "https://outspoken-uphill-zone.ngrok-free.dev"
+      - "https://molehill-humid-unstirred.ngrok-free.dev"
 
 management:
   endpoints:

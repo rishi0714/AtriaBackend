@@ -70,7 +70,8 @@ public class EventService {
         UUID userId = SecurityContextUtil.currentUserId();
         User user = userService.findUserOrThrow(userId);
 
-        if (user.getCollege() != null) {
+        // College student but college is inactive → treat as guest
+        if (user.getCollege() != null && user.getCollege().isActive()) {
             // College student — own college published events + all open published events
             return eventRepository
                     .findVisibleEventsForCollege(
@@ -79,7 +80,7 @@ public class EventService {
                             pageable)
                     .map(eventMapper::toResponseDto);
         } else {
-            // Guest student — only open published events
+            // Guest student OR college is inactive → only open published events
             return eventRepository
                     .findAllByIsOpenToAllTrueAndStatus(
                             EventStatus.PUBLISHED,
@@ -93,6 +94,14 @@ public class EventService {
         return eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Event not found."));
+    }
+
+    @Transactional(readOnly = true)
+    public long getEventCountByCollege(UUID collegeId) {
+
+        collegeService.findCollegeOrThrow(collegeId); // optional validation
+
+        return eventRepository.countByCollege_CollegeId(collegeId);
     }
 
     @Transactional(readOnly = true)

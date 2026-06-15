@@ -9,6 +9,7 @@ import com.campus.platform.user.entity.User;
 import com.campus.platform.user.mapper.UserMapper;
 import com.campus.platform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -19,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -33,19 +34,30 @@ public class UserService {
     public User provisionUser(String googleSub, String email,
                               String fullName, String pictureUrl,
                               College college) {
+        log.info("provisionUser called — email: {}, college: {}",
+                email, college != null ? college.getCollegeId() : "NULL");
 
-        // Already logged in before — return existing session
+        // Already logged in before — update college if missing
         Optional<User> byGoogleSub = userRepository.findByGoogleSub(googleSub);
-        if (byGoogleSub.isPresent()) return byGoogleSub.get();
+        if (byGoogleSub.isPresent()) {
+            User existing = byGoogleSub.get();
+            if (existing.getCollege() == null && college != null) {
+                existing.setCollege(college);
+                return userRepository.save(existing);
+            }
+            return existing;
+        }
 
         // Email was pre-assigned by platform admin (stub exists, no googleSub yet)
         Optional<User> byEmail = userRepository.findByEmail(email.toLowerCase());
         if (byEmail.isPresent()) {
             User existing = byEmail.get();
-            existing.setGoogleSub(googleSub);   // bind Google identity on first login
-            existing.setFullName(fullName);     // fill real name from Google
+            existing.setGoogleSub(googleSub);
+            existing.setFullName(fullName);
             existing.setPictureUrl(pictureUrl);
-            // role + college already set — do NOT override
+            if (existing.getCollege() == null && college != null) {
+                existing.setCollege(college);
+            }
             return userRepository.save(existing);
         }
 
@@ -58,6 +70,11 @@ public class UserService {
                 .role(UserRole.STUDENT)
                 .college(college)
                 .build());
+    }
+
+    @Transactional(readOnly = true)
+    public long getUserCountByCollege(UUID collegeId) {
+        return userRepository.countByCollege_CollegeId(collegeId);
     }
 
     @Transactional
@@ -107,14 +124,6 @@ public class UserService {
         return userMapper.toResponseDto(findUserOrThrow(userId));
     }
 
-    @Transactional(readOnly = true)
-    public List<UserResponseDto> getUsersByCollege(UUID collegeId) {
-        return userRepository.findAllByCollege_CollegeId(collegeId)
-                .stream()
-                .map(userMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
     @Transactional
     public UserResponseDto completeStudentProfile(UUID userId, CompleteStudentProfileDto dto) {
         User user = findUserOrThrow(userId);
@@ -135,31 +144,19 @@ public class UserService {
     }
 
     @Transactional
-    public void removeCollegeAdmin(UUID collegeId, String email) {
-        User admin = userRepository.findByEmail(email.toLowerCase())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "No user found with email: " + email));
-
-        if (admin.getRole() != UserRole.COLLEGE_ADMIN) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "User is not a college admin.");
-        }
-
-        if (!admin.belongsToCollege(collegeId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "User is not an admin of this college.");
-        }
-
-        userRepository.delete(admin);
-    }
-
-    @Transactional
     public UserResponseDto assignCollegeAdmin(AssignCollegeAdminDto dto) {
-        // domain removed from lookup — college identified by name only
         College college = collegeRepository
                 .findByNameIgnoreCase(dto.getCollegeName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No college found with name '" + dto.getCollegeName() + "'"));
+
+        // Check if college already has an admin
+        List<User> existingAdmins = userRepository
+                .findAllByCollege_CollegeIdAndRole(college.getCollegeId(), UserRole.COLLEGE_ADMIN);
+        if (!existingAdmins.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "College already has an admin. Remove the existing admin first.");
+        }
 
         String email = dto.getEmail().toLowerCase();
 
@@ -179,6 +176,27 @@ public class UserService {
                         .build());
 
         return userMapper.toResponseDto(userRepository.save(user));
+    }
+
+    @Transactional
+    public void removeCollegeAdmin(UUID collegeId, String email) {
+        User admin = userRepository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No user found with email: " + email));
+
+        if (admin.getRole() != UserRole.COLLEGE_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "User is not a college admin.");
+        }
+
+        if (!admin.belongsToCollege(collegeId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "User is not an admin of this college.");
+        }
+
+        // Demote to STUDENT instead of deleting
+        admin.setRole(UserRole.STUDENT);
+        userRepository.save(admin);
     }
 
     @Transactional(readOnly = true)
@@ -216,6 +234,16 @@ public class UserService {
         user.setPhoneNumber(dto.getPhoneNumber());
         user.setProfileComplete(true);
         return userMapper.toResponseDto(userRepository.save(user));
+    }
+    @Transactional(readOnly = true)
+    public List<UserResponseDto> getAdminsByCollege(UUID collegeId) {
+        return userRepository
+                .findAllByCollege_CollegeIdAndRoleIn(
+                        collegeId,
+                        List.of(UserRole.COLLEGE_ADMIN, UserRole.CLUB_ADMIN))
+                .stream()
+                .map(userMapper::toResponseDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

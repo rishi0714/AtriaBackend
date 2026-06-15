@@ -46,6 +46,14 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
     Optional<Registration> findByUser_EmailAndEvent_EventIdAndIsCancelledFalse(
             String email, UUID eventId);
 
+    @Query("SELECT r FROM Registration r " +
+            "JOIN FETCH r.user " +
+            "JOIN FETCH r.event e " +
+            "JOIN FETCH e.club " +
+            "WHERE r.registrationId = :id")
+    Optional<Registration> findByIdWithDetails(@Param("id") UUID id);
+
+
 
 
     // RegistrationRepository.java — add this alongside countByEventIds
@@ -53,4 +61,16 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
             "JOIN FETCH r.user " +
             "WHERE r.event.eventId IN :eventIds AND r.isCancelled = false")
     List<Registration> findAllByEvent_EventIdInAndIsCancelledFalse(@Param("eventIds") List<UUID> eventIds);
+
+    // Add this alongside your existing queries
+    @Query("""
+    SELECT r FROM Registration r
+    JOIN FETCH r.user
+    JOIN FETCH r.event e
+    JOIN FETCH e.club
+    JOIN FETCH e.college
+    WHERE r.event.eventId = :eventId
+    AND r.isCancelled = false
+""")
+    List<Registration> findParticipantsWithDetails(@Param("eventId") UUID eventId);
 }

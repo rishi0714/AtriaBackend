@@ -41,6 +41,16 @@ public class EventController {
         return ResponseEntity.ok(eventService.getVisibleEvents(pageable)); // ← only change
     }
 
+    @GetMapping("/api/platform/colleges/{collegeId}/events/count")
+    @PreAuthorize("hasRole('PLATFORM_OWNER')")
+    public ResponseEntity<Long> getEventCountByCollege(
+            @PathVariable UUID collegeId) {
+
+        return ResponseEntity.ok(
+                eventService.getEventCountByCollege(collegeId)
+        );
+    }
+
     @GetMapping("/api/student/events/{eventId}")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<EventResponseDto> getEventById(@PathVariable UUID eventId) {

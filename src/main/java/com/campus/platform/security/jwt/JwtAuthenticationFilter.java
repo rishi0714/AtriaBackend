@@ -1,6 +1,8 @@
 package com.campus.platform.security.jwt;
 
 import com.campus.platform.common.enums.UserRole;
+import com.campus.platform.user.entity.User;
+import com.campus.platform.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,13 +21,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Intercepts every request, extracts the Bearer JWT, validates it,
- * and populates the SecurityContext with the authenticated principal.
- *
- * Downstream code can call SecurityContextHolder.getContext().getAuthentication()
- * to retrieve the JwtAuthenticatedPrincipal.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -35,6 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -52,6 +48,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UserRole role = UserRole.valueOf(claims.get("role", String.class));
                 String rawCollegeId = claims.get("collegeId", String.class);
                 UUID collegeId = rawCollegeId != null ? UUID.fromString(rawCollegeId) : null;
+
+                // Real-time college active check for COLLEGE_ADMIN
+                // Real-time college active check for COLLEGE_ADMIN and CLUB_ADMIN
+                if (role == UserRole.COLLEGE_ADMIN || role == UserRole.CLUB_ADMIN) {
+                    User user = userRepository.findByIdWithCollege(userId).orElse(null);
+                    if (user == null) {
+                        log.warn("{} JWT valid but user not found: {}", role, userId);
+                        SecurityContextHolder.clearContext();
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found.");
+                        return;
+                    }
+                    if (user.getCollege() != null && !user.getCollege().isActive()) {
+                        log.warn("{} {} blocked — college is inactive.", role, userId);
+                        SecurityContextHolder.clearContext();
+                        response.sendError(HttpServletResponse.SC_FORBIDDEN, "Your college has been deactivated.");
+                        return;
+                    }
+                }
 
                 JwtAuthenticatedPrincipal principal =
                         new JwtAuthenticatedPrincipal(userId, email, role, collegeId);

@@ -29,9 +29,6 @@ public interface AttendanceRepository extends JpaRepository<Attendance, UUID> {
 
     long countByRegistration_User_UserId(UUID userId);
 
-    @Query("SELECT a.registration.registrationId FROM Attendance a WHERE a.registration.event.eventId = :eventId")
-    Set<UUID> findRegistrationIdsByEvent(@Param("eventId") UUID eventId);
-
     // AttendanceRepository.java
     @Query("SELECT r.event.eventId, COUNT(a) FROM Attendance a " +
             "JOIN a.registration r " +
@@ -41,4 +38,12 @@ public interface AttendanceRepository extends JpaRepository<Attendance, UUID> {
 
     @Query("SELECT a.registration.registrationId FROM Attendance a WHERE a.registration.user.userId = :userId")
     Set<UUID> findRegistrationIdsByUser(@Param("userId") UUID userId);
+
+    // Should already exist — if not, add it
+    @Query("""
+    SELECT a.registration.registrationId
+    FROM Attendance a
+    WHERE a.registration.event.eventId = :eventId
+    """)
+    Set<UUID> findRegistrationIdsByEvent(@Param("eventId") UUID eventId);
 }
