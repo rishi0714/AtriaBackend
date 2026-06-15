@@ -112,7 +112,7 @@ Platform Owner
 | `registrations` | `registration_id`, `event_id`, `user_id`, `qr_code`, `is_cancelled`, `registered_at` | Student registrations per event with QR code generation |
 | `attendance` | `attendance_id`, `registration_id`, `scanned_by`, `scanned_at` | QR-based check-in records linked to registrations |
 
-> ✅ ATRIA uses **Flyway** for database migrations — the schema is created and versioned automatically on startup.
+> ⚠️ Flyway is currently disabled and `ddl-auto` is set to `validate` — Hibernate will **not** create tables automatically. The database schema must be created manually before starting the application.
 
 ---
 
@@ -136,8 +136,8 @@ You will also need:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/rishi0714/Atria.git
-cd Atria
+git clone https://github.com/rishi0714/AtriaBackend.git
+cd AtriaBackend
 ```
 
 ### 2. Set up PostgreSQL database
@@ -205,6 +205,17 @@ Backend runs at: `http://localhost:8081`
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | ✅ |
 | `CLOUDINARY_API_KEY` | Cloudinary API key | ✅ |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret | ✅ |
+
+---
+
+## 📖 API Documentation
+
+Once the backend is running, explore the full API via:
+
+| | URL |
+|--|-----|
+| Swagger UI | `http://localhost:8081/swagger-ui.html` |
+| OpenAPI Spec | `http://localhost:8081/v3/api-docs` |
 
 ---
 
