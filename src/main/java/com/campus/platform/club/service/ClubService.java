@@ -138,14 +138,24 @@ public class ClubService {
     private User resolveAndPromoteClubAdmin(String email, UUID collegeId) {
         College college = collegeService.findCollegeOrThrow(collegeId);
 
+        // ── NEW: validate email domain matches college ────────────────────────────
+        String emailDomain = email.toLowerCase().substring(email.indexOf('@') + 1);
+        boolean domainMatches = college.getDomains().stream()
+                .anyMatch(d -> d.getDomain().equalsIgnoreCase(emailDomain));
+
+        if (!domainMatches) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Email domain '@" + emailDomain +
+                            "' does not match any registered domain for this college.");
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
         User user = userRepository.findByEmail(email.toLowerCase())
                 .map(existing -> {
-                    // Must belong to this college
                     if (!existing.belongsToCollege(collegeId)) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "User does not belong to your college.");
                     }
-                    // Can't demote a higher role
                     if (existing.getRole() == UserRole.COLLEGE_ADMIN
                             || existing.getRole() == UserRole.PLATFORM_OWNER) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -156,8 +166,8 @@ public class ClubService {
                 .orElseGet(() -> userRepository.save(User.builder()
                         .email(email.toLowerCase())
                         .fullName("")
-                        .role(UserRole.STUDENT)   // will be promoted below
-                        .college(college)
+                        .role(UserRole.STUDENT)
+                        .college(college)       // ← now safe because domain was validated above
                         .profileComplete(false)
                         .build()));
 
@@ -166,7 +176,6 @@ public class ClubService {
                     "User is already managing another club.");
         }
 
-        // auto-promote STUDENT → CLUB_ADMIN
         if (user.getRole() == UserRole.STUDENT) {
             user.setRole(UserRole.CLUB_ADMIN);
             userRepository.save(user);

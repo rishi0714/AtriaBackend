@@ -13,9 +13,9 @@
     </parent>
 
     <groupId>com.campus</groupId>
-    <artifactId>campus-platform</artifactId>
+    <artifactId>atria</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>Campus Event &amp; Attendance Management Platform</name>
+    <name>Atria</name>
     <description>Multi-tenant campus event platform</description>
 
     <properties>

@@ -1,9 +1,6 @@
 package com.campus.platform.college.controller;
 
-import com.campus.platform.college.dto.CollegeDomainDto;
-import com.campus.platform.college.dto.CollegeDomainResponseDto;
-import com.campus.platform.college.dto.CollegeDto;
-import com.campus.platform.college.dto.CollegeResponseDto;
+import com.campus.platform.college.dto.*;
 import com.campus.platform.college.service.CollegeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +19,13 @@ import java.util.UUID;
 public class CollegeController {
 
     private final CollegeService collegeService;
+
+    @PostMapping("/setup")
+    public ResponseEntity<CollegeSetupResponseDto> setupCollege(
+            @Valid @RequestBody CollegeSetupDto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(collegeService.setupCollege(dto));
+    }
 
     @PostMapping
     public ResponseEntity<CollegeResponseDto> createCollege(

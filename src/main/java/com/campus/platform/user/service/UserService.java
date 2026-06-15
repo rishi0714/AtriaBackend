@@ -145,23 +145,42 @@ public class UserService {
 
     @Transactional
     public UserResponseDto assignCollegeAdmin(AssignCollegeAdminDto dto) {
+
         College college = collegeRepository
                 .findByNameIgnoreCase(dto.getCollegeName())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
                         "No college found with name '" + dto.getCollegeName() + "'"));
 
-        // Check if college already has an admin
-        List<User> existingAdmins = userRepository
-                .findAllByCollege_CollegeIdAndRole(college.getCollegeId(), UserRole.COLLEGE_ADMIN);
-        if (!existingAdmins.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "College already has an admin. Remove the existing admin first.");
+        // ── NEW: college must have at least one domain configured ────────────
+        if (college.getDomains().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "College has no domains configured.");
         }
 
+        // ── NEW: admin email must match one of the college's registered domains
         String email = dto.getEmail().toLowerCase();
+        String emailDomain = email.substring(email.indexOf('@') + 1);
 
+        boolean domainMatches = college.getDomains().stream()
+                .anyMatch(d -> d.getDomain().equalsIgnoreCase(emailDomain));
+
+        if (!domainMatches) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Admin email domain '@" + emailDomain +
+                            "' does not match any registered domain for this college.");
+        }
+
+        // ── rest is unchanged ────────────────────────────────────────────────
         User user = userRepository.findByEmail(email)
                 .map(existing -> {
+                    if (existing.getRole() == UserRole.COLLEGE_ADMIN &&
+                            existing.getCollege() != null &&
+                            !existing.getCollege().getCollegeId()
+                                    .equals(college.getCollegeId())) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "User is already a college admin of another college.");
+                    }
                     existing.setRole(UserRole.COLLEGE_ADMIN);
                     existing.setCollege(college);
                     existing.setProfileComplete(true);
