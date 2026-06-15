@@ -104,18 +104,17 @@ Platform Owner
 
 ## 🗃️ Database Schema (Entities)
 
-| Entity | Description |
-|--------|-------------|
-| `User` | User accounts with roles and profile details |
-| `College` | College records with domain management |
-| `Club` | Club records linked to colleges |
-| `Event` | Events created by clubs with lifecycle tracking |
-| `Registration` | Student registrations per event |
-| `Attendance` | QR check-in records per registration |
-| `DailyProgress` | Daily snapshot of event and registration metrics |
-| `RefreshToken` | Hashed refresh tokens for secure session management |
+| Entity | Key Fields | Description |
+|--------|-----------|-------------|
+| `users` | `user_id`, `email`, `full_name`, `role`, `college_id`, `stream`, `year`, `registration_number` | User accounts with roles, profile details, and college association |
+| `colleges` | `college_id`, `name`, `logo_url`, `is_active` | College records managed by the platform owner |
+| `college_domains` | `id`, `college_id`, `domain`, `is_primary` | Email domains linked to colleges for student verification |
+| `clubs` | `club_id`, `name`, `college_id`, `managed_by`, `club_category`, `description`, `logo_url`, `is_active` | Clubs linked to colleges with category and admin assignment |
+| `events` | `event_id`, `club_id`, `college_id`, `title`, `status`, `event_date`, `max_capacity`, `registration_deadline`, `poster_url`, `rejection_reason` | Full event lifecycle including status, capacity, and scheduling |
+| `registrations` | `registration_id`, `event_id`, `user_id`, `qr_code`, `is_cancelled`, `registered_at` | Student registrations per event with QR code generation |
+| `attendance` | `attendance_id`, `registration_id`, `scanned_by`, `scanned_at` | QR-based check-in records linked to registrations |
 
-> ⚠️ ATRIA uses `ddl-auto: validate` — Hibernate does **not** auto-create tables. The database schema must be set up manually before starting the application.
+> ✅ ATRIA uses **Flyway** for database migrations — the schema is created and versioned automatically on startup.
 
 ---
 
@@ -223,19 +222,83 @@ Frontend runs at: `http://localhost:5173`
 
 ---
 
-## 📡 API Overview
+## 📁 Project Structure
 
-| Group | Base Route | Description |
-|-------|-----------|-------------|
-| Authentication | `/api/auth` | Login, token refresh, logout |
-| Current User | `/api/me` | Profile, profile completion |
-| Platform Owner | `/api/platform` | College management, system analytics |
-| Colleges | `/api/platform/colleges` | Create colleges, manage domains, assign admins |
-| Clubs | `/api/club` | Club dashboard, analytics, event & member management |
-| Events | `/api/events` | Event creation, updates, discovery |
-| Registrations | `/api/registrations` | Register, cancel, track registration status |
-| Attendance | `/api/attendance` | QR check-ins, attendance tracking |
-| Users | `/api/users` | User management, role assignment |
+```
+src/main/java/com/campus/platform/
+├── CampusPlatformApplication.java       # Entrypoint
+│
+├── security/                            # Security infrastructure
+│   ├── auth/                            # Auth controller, service, DTOs
+│   ├── config/                          # SecurityConfig, CloudinaryConfig, OpenApiConfig
+│   ├── jwt/                             # JWT filter, token provider, principal
+│   └── oauth2/                          # Google OAuth2 handlers & services
+│
+├── user/                                # User management
+│   ├── controller/                      # UserController, StudentController
+│   ├── entity/                          # User.java
+│   ├── service/                         # UserService
+│   ├── mapper/ & repository/ & dto/
+│
+├── college/                             # College & domain management
+│   ├── controller/                      # CollegeController
+│   ├── entity/                          # College.java, CollegeDomain.java
+│   ├── service/                         # CollegeService
+│   ├── mapper/ & repository/ & dto/
+│
+├── club/                                # Club management & analytics
+│   ├── controller/                      # ClubController
+│   ├── entity/                          # Club.java
+│   ├── service/                         # ClubService, AnalyticsService
+│   ├── mapper/ & repository/ & dto/
+│
+├── event/                               # Event lifecycle
+│   ├── controller/                      # EventController
+│   ├── entity/                          # Event.java
+│   ├── scheduler/                       # EventScheduler
+│   ├── service/                         # EventService
+│   ├── mapper/ & repository/ & dto/
+│
+├── registration/                        # Event registrations
+│   ├── controller/                      # RegistrationController
+│   ├── entity/                          # Registration.java
+│   ├── service/                         # RegistrationService
+│   ├── mapper/ & repository/ & dto/
+│
+├── attendance/                          # QR-based attendance
+│   ├── controller/                      # AttendanceController
+│   ├── entity/                          # Attendance.java
+│   ├── service/                         # AttendanceService
+│   ├── mapper/ & repository/ & dto/
+│
+├── dashboard/                           # Role-specific dashboards
+│   ├── controller/                      # DashboardController
+│   ├── service/                         # DashboardService
+│   └── dto/                             # SuperAdmin, CollegeAdmin, ClubAdmin, Student DTOs
+│
+├── upload/                              # Cloudinary media uploads
+│   ├── controller/                      # UploadController
+│   └── service/                         # UploadService
+│
+├── export/                              # CSV data export
+│   ├── CsvExportController.java
+│   └── CsvExportService.java
+│
+├── bootstrap/                           # Seed data on startup
+│   └── PlatformOwnerBootstrap.java      # Creates initial platform owner
+│
+├── common/                              # Shared utilities
+│   ├── enums/                           # EventStatus, UserRole
+│   ├── response/                        # ApiResponse wrapper
+│   ├── service/                         # EmailService, QrCodeService
+│   └── util/                            # SecurityContextUtil
+│
+└── exception/                           # Global exception handling
+    ├── GlobalExceptionHandler.java
+    ├── DuplicateResourceException.java
+    ├── ResourceNotFoundException.java
+    └── TenantAccessDeniedException.java
+```
 
 ---
 
@@ -251,6 +314,15 @@ Contributions are welcome! Feel free to open an issue or submit a pull request.
 
 ---
 
+## 🧑‍💻 Author
+
 <div align="center">
-  <p>Built with ❤️ by <a href="https://github.com/rishi0714">Rishi Kumar Uppalapati</a></p>
+
+**Rishi Kumar Uppalapati**
+
+[![GitHub](https://img.shields.io/badge/GitHub-rishi0714-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/rishi0714)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/rishi-kumar-uppalapati-02333928a)
+
+⭐ If this project helped or inspired you, give it a star!
+
 </div>
