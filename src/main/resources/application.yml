@@ -74,8 +74,6 @@ app:
 
   cors:
     allowed-origins:
-      - "http://localhost:5173"
-      - "http://192.168.0.141:5173"
       - "https://outspoken-uphill-zone.ngrok-free.dev"
       - "https://molehill-humid-unstirred.ngrok-free.dev"
 
