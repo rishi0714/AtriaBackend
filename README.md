@@ -10,7 +10,6 @@ Connect students, clubs, and college administrators through a unified ecosystem 
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2.x-6DB33F?style=flat-square&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-![React](https://img.shields.io/badge/React-Vite-61DAFB?style=flat-square&logo=react&logoColor=black)
 
 </div>
 
@@ -97,7 +96,6 @@ Platform Owner
 | Media Storage | Cloudinary |
 | Email | JavaMail (Gmail) |
 | Containerization | Docker |
-| Frontend | React + Vite + JavaScript |
 | Build | Maven |
 
 ---
@@ -125,8 +123,6 @@ Platform Owner
 | Java | 17+ |
 | Maven | 3.9+ |
 | PostgreSQL | 14+ |
-| Node.js | 18+ |
-| npm | 9+ |
 
 You will also need:
 - A **Google OAuth2** credentials (Client ID & Secret) from [Google Cloud Console](https://console.cloud.google.com/)
@@ -188,16 +184,6 @@ mvn spring-boot:run
 ```
 
 Backend runs at: `http://localhost:8081`
-
-### 5. Run the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend runs at: `http://localhost:5173`
 
 ---
 
