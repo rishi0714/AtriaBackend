@@ -68,8 +68,6 @@ public class RegistrationService {
 
         Registration saved = registrationRepository.save(registration);
 
-// Fire email after commit when a transaction exists.
-// Unit tests usually don't have an active transaction.
         UUID savedId = saved.getRegistrationId();
 
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
