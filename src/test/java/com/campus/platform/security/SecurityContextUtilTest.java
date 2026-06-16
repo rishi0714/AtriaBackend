@@ -69,7 +69,7 @@ class SecurityContextUtilTest {
     @Test
     @DisplayName("assertSameTenant() always passes for SUPER_ADMIN (null collegeId)")
     void superAdminBypassesTenantCheck() {
-        setUpContext(UserRole.SUPER_ADMIN, null); // null = no tenant restriction
+        setUpContext(UserRole.PLATFORM_OWNER, null); // null = no tenant restriction
         UUID anyCollege = UUID.randomUUID();
 
         assertThatNoException()

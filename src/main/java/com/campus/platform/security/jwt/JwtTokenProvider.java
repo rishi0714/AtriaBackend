@@ -98,8 +98,8 @@ public class JwtTokenProvider {
             log.warn("JWT unsupported: {}", e.getMessage());
         } catch (MalformedJwtException e) {
             log.warn("JWT malformed: {}", e.getMessage());
-        } catch (SecurityException e) {
-            log.warn("JWT signature invalid: {}", e.getMessage());
+        } catch (JwtException e) {   // catches SignatureException and other JWT errors
+            log.warn("JWT invalid: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
             log.warn("JWT claims empty: {}", e.getMessage());
         }

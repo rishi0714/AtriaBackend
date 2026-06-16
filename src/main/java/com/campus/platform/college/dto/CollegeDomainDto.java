@@ -13,6 +13,5 @@ public class CollegeDomainDto {
             message = "Must be a valid domain e.g. gitam.edu.in"
     )
     private String domain;
-
     private boolean primary = false;
 }

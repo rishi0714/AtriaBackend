@@ -146,7 +146,16 @@ public class EventService {
     @Transactional
     public void deleteEvent(UUID eventId, UUID collegeId) {
         Event event = findEventInTenantOrThrow(eventId, collegeId);
-        eventRepository.delete(event);
+
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Event already cancelled."
+            );
+        }
+
+        event.setStatus(EventStatus.CANCELLED);
+        eventRepository.save(event);
     }
 
     @Transactional

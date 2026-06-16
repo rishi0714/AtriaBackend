@@ -68,17 +68,24 @@ public class RegistrationService {
 
         Registration saved = registrationRepository.save(registration);
 
-        // Fire email AFTER the transaction commits so the async thread
-        // can re-fetch the fully persisted row with a fresh session
+// Fire email after commit when a transaction exists.
+// Unit tests usually don't have an active transaction.
         UUID savedId = saved.getRegistrationId();
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        emailService.sendRegistrationEmail(savedId);
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            emailService.sendRegistrationEmail(savedId);
+                        }
                     }
-                }
-        );
+            );
+
+        } else {
+            emailService.sendRegistrationEmail(savedId);
+        }
 
         return registrationMapper.toResponseDto(saved);
     }

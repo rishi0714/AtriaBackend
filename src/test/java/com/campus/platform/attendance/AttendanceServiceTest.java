@@ -7,9 +7,12 @@ import com.campus.platform.attendance.mapper.AttendanceMapper;
 import com.campus.platform.attendance.repository.AttendanceRepository;
 import com.campus.platform.attendance.service.AttendanceService;
 import com.campus.platform.college.entity.College;
+import com.campus.platform.common.enums.EventStatus;
 import com.campus.platform.common.enums.UserRole;
 import com.campus.platform.event.entity.Event;
+import com.campus.platform.event.service.EventService;
 import com.campus.platform.registration.entity.Registration;
+import com.campus.platform.registration.repository.RegistrationRepository;
 import com.campus.platform.registration.service.RegistrationService;
 import com.campus.platform.user.entity.User;
 import com.campus.platform.user.service.UserService;
@@ -34,14 +37,31 @@ import static org.mockito.Mockito.*;
 @DisplayName("AttendanceService")
 class AttendanceServiceTest {
 
-    @Mock AttendanceRepository attendanceRepository;
-    @Mock AttendanceMapper attendanceMapper;
-    @Mock RegistrationService registrationService;
-    @Mock UserService userService;
+    @Mock
+    private AttendanceRepository attendanceRepository;
 
-    @InjectMocks AttendanceService attendanceService;
+    @Mock
+    private AttendanceMapper attendanceMapper;
 
-    private UUID collegeId, eventId, scannerUserId;
+    @Mock
+    private RegistrationService registrationService;
+
+    @Mock
+    private UserService userService;
+
+    @Mock
+    private RegistrationRepository registrationRepository;
+
+    @Mock
+    private EventService eventService;
+
+    @InjectMocks
+    private AttendanceService attendanceService;
+
+    private UUID collegeId;
+    private UUID eventId;
+    private UUID scannerUserId;
+
     private College college;
     private Event event;
     private User scanner;
@@ -50,21 +70,26 @@ class AttendanceServiceTest {
 
     @BeforeEach
     void setUp() {
-        collegeId     = UUID.randomUUID();
-        eventId       = UUID.randomUUID();
+
+        collegeId = UUID.randomUUID();
+        eventId = UUID.randomUUID();
         scannerUserId = UUID.randomUUID();
 
-        college = College.builder().collegeId(collegeId).name("Test College").build();
+        college = College.builder()
+                .collegeId(collegeId)
+                .name("Test College")
+                .build();
 
         event = Event.builder()
                 .eventId(eventId)
                 .college(college)
                 .title("Tech Fest")
+                .status(EventStatus.PUBLISHED)
                 .build();
 
         scanner = User.builder()
                 .userId(scannerUserId)
-                .email("admin@sreenidhi.edu.in")
+                .email("admin@test.edu")
                 .fullName("Club Admin")
                 .role(UserRole.CLUB_ADMIN)
                 .college(college)
@@ -72,8 +97,8 @@ class AttendanceServiceTest {
 
         User student = User.builder()
                 .userId(UUID.randomUUID())
-                .email("student@sreenidhi.edu.in")
-                .fullName("Test Student")
+                .email("student@test.edu")
+                .fullName("Student")
                 .college(college)
                 .build();
 
@@ -89,7 +114,6 @@ class AttendanceServiceTest {
         dto = AttendanceDto.builder()
                 .qrCode("valid-qr-token")
                 .eventId(eventId)
-                .scannedById(scannerUserId)
                 .build();
     }
 
@@ -98,12 +122,18 @@ class AttendanceServiceTest {
     class ScanQrCode {
 
         @Test
-        @DisplayName("marks attendance on valid, first-time QR scan")
+        @DisplayName("marks attendance on valid first scan")
         void success() {
-            when(registrationService.findByQrCodeOrThrow("valid-qr-token")).thenReturn(registration);
+
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
             when(attendanceRepository.existsByRegistration_RegistrationId(
-                    registration.getRegistrationId())).thenReturn(false);
-            when(userService.findUserOrThrow(scannerUserId)).thenReturn(scanner);
+                    registration.getRegistrationId()))
+                    .thenReturn(false);
+
+            when(userService.findUserOrThrow(scannerUserId))
+                    .thenReturn(scanner);
 
             Attendance saved = Attendance.builder()
                     .attendanceId(UUID.randomUUID())
@@ -112,51 +142,85 @@ class AttendanceServiceTest {
                     .scannedAt(LocalDateTime.now())
                     .build();
 
-            when(attendanceRepository.save(any())).thenReturn(saved);
-            when(attendanceMapper.toResponseDto(saved)).thenReturn(new AttendanceResponseDto());
+            when(attendanceRepository.save(any(Attendance.class)))
+                    .thenReturn(saved);
 
-            AttendanceResponseDto result = attendanceService.scanQrCode(dto, collegeId);
+            when(attendanceMapper.toResponseDto(saved))
+                    .thenReturn(new AttendanceResponseDto());
+
+            AttendanceResponseDto result =
+                    attendanceService.scanQrCode(
+                            dto,
+                            collegeId,
+                            scannerUserId);
 
             assertThat(result).isNotNull();
-            verify(attendanceRepository).save(any(Attendance.class));
+
+            verify(attendanceRepository)
+                    .save(any(Attendance.class));
         }
 
         @Test
-        @DisplayName("throws 409 on duplicate scan")
+        @DisplayName("throws 409 when attendance already exists")
         void duplicateScan() {
-            when(registrationService.findByQrCodeOrThrow("valid-qr-token")).thenReturn(registration);
-            when(attendanceRepository.existsByRegistration_RegistrationId(
-                    registration.getRegistrationId())).thenReturn(true); // already scanned
 
-            assertThatThrownBy(() -> attendanceService.scanQrCode(dto, collegeId))
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
+            when(attendanceRepository.existsByRegistration_RegistrationId(
+                    registration.getRegistrationId()))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() ->
+                    attendanceService.scanQrCode(
+                            dto,
+                            collegeId,
+                            scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("already marked");
 
-            verify(attendanceRepository, never()).save(any());
+            verify(attendanceRepository, never())
+                    .save(any());
         }
 
         @Test
-        @DisplayName("throws 403 when QR belongs to a different college tenant")
+        @DisplayName("throws 403 for cross tenant QR")
         void crossTenantQr() {
+
             UUID otherCollegeId = UUID.randomUUID();
 
-            assertThatThrownBy(() -> attendanceService.scanQrCode(dto, otherCollegeId))
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
+            assertThatThrownBy(() ->
+                    attendanceService.scanQrCode(
+                            dto,
+                            otherCollegeId,
+                            scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
-                    .satisfies(e -> {
-                        ResponseStatusException rse = (ResponseStatusException) e;
-                        assertThat(rse.getStatusCode().value()).isEqualTo(403);
+                    .satisfies(ex -> {
+                        ResponseStatusException rse =
+                                (ResponseStatusException) ex;
+
+                        assertThat(rse.getStatusCode().value())
+                                .isEqualTo(403);
                     });
         }
 
         @Test
-        @DisplayName("throws 400 when QR is for a different event")
+        @DisplayName("throws 400 when QR belongs to another event")
         void wrongEvent() {
-            UUID differentEventId = UUID.randomUUID();
-            dto.setEventId(differentEventId); // mismatch
 
-            when(registrationService.findByQrCodeOrThrow("valid-qr-token")).thenReturn(registration);
+            dto.setEventId(UUID.randomUUID());
 
-            assertThatThrownBy(() -> attendanceService.scanQrCode(dto, collegeId))
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
+            assertThatThrownBy(() ->
+                    attendanceService.scanQrCode(
+                            dto,
+                            collegeId,
+                            scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("different event");
         }
@@ -164,12 +228,55 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("throws 400 when registration is cancelled")
         void cancelledRegistration() {
-            registration.setCancelled(true);
-            when(registrationService.findByQrCodeOrThrow("valid-qr-token")).thenReturn(registration);
 
-            assertThatThrownBy(() -> attendanceService.scanQrCode(dto, collegeId))
+            registration.setCancelled(true);
+
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
+            assertThatThrownBy(() ->
+                    attendanceService.scanQrCode(
+                            dto,
+                            collegeId,
+                            scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("cancelled");
+        }
+
+        @Test
+        @DisplayName("throws 400 when event is pending approval")
+        void pendingApprovalEvent() {
+
+            event.setStatus(EventStatus.PENDING_APPROVAL);
+
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
+            assertThatThrownBy(() ->
+                    attendanceService.scanQrCode(
+                            dto,
+                            collegeId,
+                            scannerUserId))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .hasMessageContaining("not published");
+        }
+
+        @Test
+        @DisplayName("throws 400 when event is rejected")
+        void rejectedEvent() {
+
+            event.setStatus(EventStatus.REJECTED);
+
+            when(registrationService.findByQrCodeOrThrow("valid-qr-token"))
+                    .thenReturn(registration);
+
+            assertThatThrownBy(() ->
+                    attendanceService.scanQrCode(
+                            dto,
+                            collegeId,
+                            scannerUserId))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .hasMessageContaining("not published");
         }
     }
 }

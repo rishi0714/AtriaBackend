@@ -1,8 +1,10 @@
 package com.campus.platform.registration;
 
+import com.campus.platform.attendance.repository.AttendanceRepository;
 import com.campus.platform.college.entity.College;
 import com.campus.platform.common.enums.EventStatus;
 import com.campus.platform.common.enums.UserRole;
+import com.campus.platform.common.service.EmailService;
 import com.campus.platform.event.entity.Event;
 import com.campus.platform.event.service.EventService;
 import com.campus.platform.registration.dto.RegistrationResponseDto;
@@ -27,7 +29,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,25 +40,33 @@ class RegistrationServiceTest {
     @Mock RegistrationMapper registrationMapper;
     @Mock UserService userService;
     @Mock EventService eventService;
+    @Mock AttendanceRepository attendanceRepository;
+    @Mock EmailService emailService;
+
 
     @InjectMocks RegistrationService registrationService;
 
-    private UUID userId, eventId, collegeId;
+    private UUID userId;
+    private UUID eventId;
+
     private User student;
     private Event event;
     private College college;
 
     @BeforeEach
     void setUp() {
-        userId    = UUID.randomUUID();
-        eventId   = UUID.randomUUID();
-        collegeId = UUID.randomUUID();
 
-        college = College.builder().collegeId(collegeId).name("Test College").build();
+        userId = UUID.randomUUID();
+        eventId = UUID.randomUUID();
+
+        college = College.builder()
+                .collegeId(UUID.randomUUID())
+                .name("Test College")
+                .build();
 
         student = User.builder()
                 .userId(userId)
-                .email("student@sreenidhi.edu.in")
+                .email("student@test.edu")
                 .fullName("Test Student")
                 .role(UserRole.STUDENT)
                 .college(college)
@@ -65,11 +75,12 @@ class RegistrationServiceTest {
         event = Event.builder()
                 .eventId(eventId)
                 .college(college)
-                .title("Hackathon 2025")
+                .title("Hackathon")
                 .status(EventStatus.PUBLISHED)
-                .eventDate(LocalDateTime.now().plusDays(7))
-                .registrationDeadline(LocalDateTime.now().plusDays(3))
+                .eventDate(LocalDateTime.now().plusDays(10))
+                .registrationDeadline(LocalDateTime.now().plusDays(5))
                 .maxCapacity(50)
+                .isOpenToAll(false)
                 .build();
     }
 
@@ -78,87 +89,144 @@ class RegistrationServiceTest {
     class RegisterForEvent {
 
         @Test
-        @DisplayName("saves registration and returns DTO on happy path")
+        @DisplayName("registers successfully")
         void success() {
-            when(userService.findUserOrThrow(userId)).thenReturn(student);
-            when(eventService.findEventInTenantOrThrow(eventId, collegeId)).thenReturn(event);
-            when(registrationRepository.countActiveByEventId(eventId)).thenReturn(10L);
-            when(registrationRepository.existsByUser_UserIdAndEvent_EventIdAndIsCancelledFalse(
-                    userId, eventId)).thenReturn(false);
 
-            Registration savedReg = Registration.builder()
+            when(userService.findUserOrThrow(userId))
+                    .thenReturn(student);
+
+            when(eventService.findEventOrThrow(eventId))
+                    .thenReturn(event);
+
+            when(registrationRepository
+                    .existsByUser_UserIdAndEvent_EventIdAndIsCancelledFalse(
+                            userId, eventId))
+                    .thenReturn(false);
+
+            when(registrationRepository
+                    .countByEvent_EventIdAndIsCancelledFalse(eventId))
+                    .thenReturn(10L);
+
+            Registration saved = Registration.builder()
                     .registrationId(UUID.randomUUID())
-                    .user(student).event(event)
+                    .user(student)
+                    .event(event)
                     .qrCode(UUID.randomUUID().toString())
                     .registeredAt(LocalDateTime.now())
+                    .isCancelled(false)
                     .build();
 
-            when(registrationRepository.save(any())).thenReturn(savedReg);
-            RegistrationResponseDto dto = new RegistrationResponseDto();
-            when(registrationMapper.toResponseDto(savedReg)).thenReturn(dto);
+            when(registrationRepository.save(any()))
+                    .thenReturn(saved);
 
+            RegistrationResponseDto response =
+                    new RegistrationResponseDto();
+
+            when(registrationMapper.toResponseDto(saved))
+                    .thenReturn(response);
+
+            // ACT
             RegistrationResponseDto result =
-                    registrationService.registerForEvent(userId, eventId, collegeId);
+                    registrationService.registerForEvent(userId, eventId);
 
+            // ASSERT
             assertThat(result).isNotNull();
-            ArgumentCaptor<Registration> captor = ArgumentCaptor.forClass(Registration.class);
-            verify(registrationRepository).save(captor.capture());
-            assertThat(captor.getValue().getQrCode()).isNotBlank();
+
+            ArgumentCaptor<Registration> captor =
+                    ArgumentCaptor.forClass(Registration.class);
+
+            verify(registrationRepository)
+                    .save(captor.capture());
+
+            assertThat(captor.getValue().getQrCode())
+                    .isNotBlank();
+
+            verify(emailService)
+                    .sendRegistrationEmail(any(UUID.class));
         }
 
         @Test
-        @DisplayName("throws 409 when student already registered")
+        @DisplayName("throws 409 when already registered")
         void duplicateRegistration() {
-            when(userService.findUserOrThrow(userId)).thenReturn(student);
-            when(eventService.findEventInTenantOrThrow(eventId, collegeId)).thenReturn(event);
-            when(registrationRepository.existsByUser_UserIdAndEvent_EventIdAndIsCancelledFalse(
-                    userId, eventId)).thenReturn(true);
+
+            when(userService.findUserOrThrow(userId))
+                    .thenReturn(student);
+
+            when(eventService.findEventOrThrow(eventId))
+                    .thenReturn(event);
+
+            when(registrationRepository
+                    .existsByUser_UserIdAndEvent_EventIdAndIsCancelledFalse(
+                            userId, eventId))
+                    .thenReturn(true);
 
             assertThatThrownBy(() ->
-                    registrationService.registerForEvent(userId, eventId, collegeId))
+                    registrationService.registerForEvent(userId, eventId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("already registered");
 
-            verify(registrationRepository, never()).save(any());
+            verify(registrationRepository, never())
+                    .save(any());
         }
 
         @Test
-        @DisplayName("throws 409 when event is at full capacity")
+        @DisplayName("throws 409 when event capacity reached")
         void fullCapacity() {
-            when(userService.findUserOrThrow(userId)).thenReturn(student);
-            when(eventService.findEventInTenantOrThrow(eventId, collegeId)).thenReturn(event);
-            when(registrationRepository.existsByUser_UserIdAndEvent_EventIdAndIsCancelledFalse(
-                    userId, eventId)).thenReturn(false);
-            when(registrationRepository.countActiveByEventId(eventId)).thenReturn(50L); // at max
+
+            when(userService.findUserOrThrow(userId))
+                    .thenReturn(student);
+
+            when(eventService.findEventOrThrow(eventId))
+                    .thenReturn(event);
+
+            when(registrationRepository
+                    .existsByUser_UserIdAndEvent_EventIdAndIsCancelledFalse(
+                            userId, eventId))
+                    .thenReturn(false);
+
+            when(registrationRepository
+                    .countByEvent_EventIdAndIsCancelledFalse(eventId))
+                    .thenReturn(50L);
 
             assertThatThrownBy(() ->
-                    registrationService.registerForEvent(userId, eventId, collegeId))
+                    registrationService.registerForEvent(userId, eventId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("maximum capacity");
         }
 
         @Test
-        @DisplayName("throws 400 when event status is not PUBLISHED")
+        @DisplayName("throws 400 when event not published")
         void eventNotPublished() {
-            event.setStatus(EventStatus.DRAFT);
-            when(userService.findUserOrThrow(userId)).thenReturn(student);
-            when(eventService.findEventInTenantOrThrow(eventId, collegeId)).thenReturn(event);
+
+            event.setStatus(EventStatus.REJECTED);
+
+            when(userService.findUserOrThrow(userId))
+                    .thenReturn(student);
+
+            when(eventService.findEventOrThrow(eventId))
+                    .thenReturn(event);
 
             assertThatThrownBy(() ->
-                    registrationService.registerForEvent(userId, eventId, collegeId))
+                    registrationService.registerForEvent(userId, eventId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("not open for registration");
         }
 
         @Test
-        @DisplayName("throws 400 when registration deadline has passed")
+        @DisplayName("throws 400 when deadline passed")
         void deadlinePassed() {
-            event.setRegistrationDeadline(LocalDateTime.now().minusHours(1));
-            when(userService.findUserOrThrow(userId)).thenReturn(student);
-            when(eventService.findEventInTenantOrThrow(eventId, collegeId)).thenReturn(event);
+
+            event.setRegistrationDeadline(
+                    LocalDateTime.now().minusHours(1));
+
+            when(userService.findUserOrThrow(userId))
+                    .thenReturn(student);
+
+            when(eventService.findEventOrThrow(eventId))
+                    .thenReturn(event);
 
             assertThatThrownBy(() ->
-                    registrationService.registerForEvent(userId, eventId, collegeId))
+                    registrationService.registerForEvent(userId, eventId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("deadline has passed");
         }
