@@ -84,6 +84,77 @@ Platform Owner
 
 ---
 
+## 🔄 How It Works
+
+### Event Creation & Approval Flow
+
+```
+Platform Owner
+   │
+   ▼
+Creates College
+   │
+   ▼
+Assigns College Admin
+   │
+   ▼
+College Admin
+   │
+   ▼
+Creates Club
+   │
+   ▼
+Assigns Club Admin
+   │
+   ▼
+Club Admin
+   │
+   ▼
+Creates Event
+   │
+   ▼
+Submits Event for Review
+   │
+   ▼
+College Admin Reviews Event
+   │
+   ├──► Approved ──► Event Published ──► Visible to Students
+   │
+   └──► Rejected ──► Club Admin Receives Feedback ──► Updates Event ──► Resubmits
+```
+
+### Student Registration & Attendance Flow
+
+```
+Student
+   │
+   ▼
+Google Login ──► JWT Issued
+   │
+   ▼
+Browse Published Events
+   │
+   ▼
+Register for Event
+   │
+   ▼
+QR Code Generated
+   │
+   ▼
+Confirmation Email Sent
+   │
+   ▼
+Attend Event
+   │
+   ▼
+QR Code Scanned
+   │
+   ▼
+Attendance Recorded
+```
+
+---
+
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
