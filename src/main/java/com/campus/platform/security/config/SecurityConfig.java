@@ -29,6 +29,22 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String UNAUTHORIZED_RESPONSE = """
+            {
+              "status":401,
+              "title":"Unauthorized",
+              "detail":"Authentication required."
+            }
+            """;
+
+    private static final String FORBIDDEN_RESPONSE = """
+            {
+              "status":403,
+              "title":"Forbidden",
+              "detail":"Insufficient role or wrong tenant."
+            }
+            """;
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CustomOidcUserService customOidcUserService;
@@ -53,7 +69,6 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-
                         .requestMatchers(
                                 "/oauth2/**",
                                 "/login/oauth2/**"
@@ -100,29 +115,13 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(401);
                             response.setContentType("application/json");
-                            response.getWriter().write(
-                                    """
-                                    {
-                                      "status":401,
-                                      "title":"Unauthorized",
-                                      "detail":"Authentication required."
-                                    }
-                                    """
-                            );
+                            response.getWriter().write(UNAUTHORIZED_RESPONSE);
                         })
 
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(403);
                             response.setContentType("application/json");
-                            response.getWriter().write(
-                                    """
-                                    {
-                                      "status":403,
-                                      "title":"Forbidden",
-                                      "detail":"Insufficient role or wrong tenant."
-                                    }
-                                    """
-                            );
+                            response.getWriter().write(FORBIDDEN_RESPONSE);
                         })
                 );
 
@@ -153,12 +152,9 @@ public class SecurityConfig {
         ));
 
         config.setAllowCredentials(true);
-
         config.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
-
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;
