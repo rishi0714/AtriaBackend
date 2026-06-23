@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict Kg7ICsGvnm3tg4uKyhFMTWhBNr5VsjafqBBHuh3moDhPvmviEFloI9BWVtM8Y8Q
-
 -- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
 -- Dumped by pg_dump version 16.14 (Debian 16.14-1.pgdg13+1)
 
@@ -353,9 +351,4 @@ ALTER TABLE ONLY public.clubs
     ADD CONSTRAINT fksp8dayqfsibg1k08k5gb385oo FOREIGN KEY (managed_by) REFERENCES public.users(user_id);
 
 
---
--- PostgreSQL database dump complete
---
-
-\unrestrict Kg7ICsGvnm3tg4uKyhFMTWhBNr5VsjafqBBHuh3moDhPvmviEFloI9BWVtM8Y8Q
 
