@@ -24,7 +24,6 @@ public class RegistrationController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<RegistrationResponseDto> register(@PathVariable UUID eventId) {
         UUID userId = SecurityContextUtil.currentUserId();
-        UUID collegeId = SecurityContextUtil.currentCollegeId();
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(registrationService.registerForEvent(userId, eventId));
     }
