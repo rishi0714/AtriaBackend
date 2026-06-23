@@ -40,52 +40,99 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = extractBearerToken(request);
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-            try {
-                Claims claims = jwtTokenProvider.parseToken(token);
-
-                UUID userId = UUID.fromString(claims.getSubject());
-                String email = claims.get("email", String.class);
-                UserRole role = UserRole.valueOf(claims.get("role", String.class));
-                String rawCollegeId = claims.get("collegeId", String.class);
-                UUID collegeId = rawCollegeId != null ? UUID.fromString(rawCollegeId) : null;
-
-                // Real-time college active check for COLLEGE_ADMIN
-                // Real-time college active check for COLLEGE_ADMIN and CLUB_ADMIN
-                if (role == UserRole.COLLEGE_ADMIN || role == UserRole.CLUB_ADMIN) {
-                    User user = userRepository.findByIdWithCollege(userId).orElse(null);
-                    if (user == null) {
-                        log.warn("{} JWT valid but user not found: {}", role, userId);
-                        SecurityContextHolder.clearContext();
-                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found.");
-                        return;
-                    }
-                    if (user.getCollege() != null && !user.getCollege().isActive()) {
-                        log.warn("{} {} blocked — college is inactive.", role, userId);
-                        SecurityContextHolder.clearContext();
-                        response.sendError(HttpServletResponse.SC_FORBIDDEN, "Your college has been deactivated.");
-                        return;
-                    }
-                }
-
-                JwtAuthenticatedPrincipal principal =
-                        new JwtAuthenticatedPrincipal(userId, email, role, collegeId);
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                principal,
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))
-                        );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            } catch (Exception e) {
-                log.warn("Could not set user authentication from JWT: {}", e.getMessage());
-                SecurityContextHolder.clearContext();
-            }
+            boolean blocked = processToken(token, response);
+            if (blocked) return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Parses the token, runs role-based checks, and sets the security context.
+     *
+     * @return true if the request was blocked (response already written), false otherwise.
+     */
+    private boolean processToken(String token, HttpServletResponse response) throws IOException {
+        try {
+            Claims claims = jwtTokenProvider.parseToken(token);
+
+            UUID userId     = UUID.fromString(claims.getSubject());
+            String email    = claims.get("email", String.class);
+            UserRole role   = UserRole.valueOf(claims.get("role", String.class));
+            String rawCollegeId = claims.get("collegeId", String.class);
+            UUID collegeId  = rawCollegeId != null ? UUID.fromString(rawCollegeId) : null;
+
+            if (requiresCollegeCheck(role)) {
+                boolean blocked = runCollegeActiveCheck(userId, role, response);
+                if (blocked) return true;
+            }
+
+            setAuthentication(userId, email, role, collegeId);
+
+        } catch (Exception e) {
+            log.warn("Could not set user authentication from JWT: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns true if the role requires a real-time college active check.
+     */
+    private boolean requiresCollegeCheck(UserRole role) {
+        return role == UserRole.COLLEGE_ADMIN || role == UserRole.CLUB_ADMIN;
+    }
+
+    /**
+     * Checks that the user exists and their college is active.
+     *
+     * @return true if the request should be blocked, false if it can proceed.
+     */
+    private boolean runCollegeActiveCheck(UUID userId,
+                                          UserRole role,
+                                          HttpServletResponse response) throws IOException {
+        User user = userRepository.findByIdWithCollege(userId).orElse(null);
+
+        if (user == null) {
+            log.warn("{} JWT valid but user not found: {}", role, userId);
+            SecurityContextHolder.clearContext();
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found.");
+            return true;
+        }
+
+        if (isCollegeInactive(user)) {
+            log.warn("{} {} blocked — college is inactive.", role, userId);
+            SecurityContextHolder.clearContext();
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Your college has been deactivated.");
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns true if the user has a college that is currently inactive.
+     */
+    private boolean isCollegeInactive(User user) {
+        return user.getCollege() != null && !user.getCollege().isActive();
+    }
+
+    /**
+     * Builds the authentication object and sets it in the security context.
+     */
+    private void setAuthentication(UUID userId, String email, UserRole role, UUID collegeId) {
+        JwtAuthenticatedPrincipal principal =
+                new JwtAuthenticatedPrincipal(userId, email, role, collegeId);
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))
+                );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     private String extractBearerToken(HttpServletRequest request) {

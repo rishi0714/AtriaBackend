@@ -1,203 +1,361 @@
--- ============================================================
--- V1__init_schema.sql
--- Campus Event & Attendance Management Platform
--- Initial schema — Flyway baseline migration
--- ============================================================
+--
+-- PostgreSQL database dump
+--
 
--- ── Enable pgcrypto for gen_random_uuid() if needed ─────────
--- (Not required on PG 13+ where gen_random_uuid() is built-in)
+\restrict Kg7ICsGvnm3tg4uKyhFMTWhBNr5VsjafqBBHuh3moDhPvmviEFloI9BWVtM8Y8Q
 
--- ── 1. COLLEGES (tenant root) ────────────────────────────────
-CREATE TABLE colleges (
-    college_id  UUID          NOT NULL DEFAULT gen_random_uuid(),
-    name        VARCHAR(255)  NOT NULL,
-    domain      VARCHAR(255)  NOT NULL,      -- e.g. sreenidhi.edu.in
-    logo_url    TEXT,
-    is_active   BOOLEAN       NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+-- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
+-- Dumped by pg_dump version 16.14 (Debian 16.14-1.pgdg13+1)
 
-    CONSTRAINT pk_colleges            PRIMARY KEY (college_id),
-    CONSTRAINT uq_colleges_domain     UNIQUE      (domain)
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: attendance; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.attendance (
+    created_at timestamp(6) without time zone,
+    scanned_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone,
+    attendance_id uuid NOT NULL,
+    registration_id uuid NOT NULL,
+    scanned_by uuid NOT NULL
 );
 
-COMMENT ON TABLE  colleges           IS 'Tenant root — one row per onboarded college.';
-COMMENT ON COLUMN colleges.domain    IS 'Google Workspace email domain used for tenant resolution at OAuth2 login.';
 
--- ── 2. USERS ─────────────────────────────────────────────────
-CREATE TABLE users (
-    user_id     UUID          NOT NULL DEFAULT gen_random_uuid(),
-    college_id  UUID,                        -- NULL for SUPER_ADMIN
-    google_sub  VARCHAR(255)  NOT NULL,      -- immutable Google identity anchor
-    email       VARCHAR(255)  NOT NULL,
-    full_name   VARCHAR(255)  NOT NULL,
-    picture_url TEXT,
-    role        VARCHAR(20)   NOT NULL DEFAULT 'STUDENT'
-                              CHECK (role IN ('STUDENT', 'CLUB_ADMIN', 'SUPER_ADMIN')),
-    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+--
+-- Name: clubs; Type: TABLE; Schema: public; Owner: -
+--
 
-    CONSTRAINT pk_users               PRIMARY KEY (user_id),
-    CONSTRAINT uq_users_google_sub    UNIQUE      (google_sub),
-    CONSTRAINT uq_users_email         UNIQUE      (email),
-    CONSTRAINT fk_users_college       FOREIGN KEY (college_id)
-                                      REFERENCES  colleges (college_id)
-                                      ON DELETE   RESTRICT
+CREATE TABLE public.clubs (
+    created_at timestamp(6) without time zone,
+    updated_at timestamp(6) without time zone,
+    club_id uuid NOT NULL,
+    college_id uuid NOT NULL,
+    managed_by uuid,
+    club_category character varying(255),
+    description text,
+    logo_url character varying(255),
+    name character varying(255) NOT NULL,
+    is_active boolean DEFAULT true NOT NULL
 );
 
-COMMENT ON COLUMN users.college_id  IS 'NULL for SUPER_ADMIN role — not tied to any tenant.';
-COMMENT ON COLUMN users.google_sub  IS 'Google sub claim from ID token — globally unique, never changes.';
 
--- ── 3. CLUBS ─────────────────────────────────────────────────
-CREATE TABLE clubs (
-    club_id     UUID          NOT NULL DEFAULT gen_random_uuid(),
-    college_id  UUID          NOT NULL,
-    name        VARCHAR(255)  NOT NULL,
-    description TEXT,
-    logo_url    TEXT,
-    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+--
+-- Name: college_domains; Type: TABLE; Schema: public; Owner: -
+--
 
-    CONSTRAINT pk_clubs               PRIMARY KEY (club_id),
-    CONSTRAINT uq_club_name_per_college UNIQUE    (college_id, name),
-    CONSTRAINT fk_clubs_college       FOREIGN KEY (college_id)
-                                      REFERENCES  colleges (college_id)
-                                      ON DELETE   CASCADE
+CREATE TABLE public.college_domains (
+    is_primary boolean NOT NULL,
+    created_at timestamp(6) without time zone,
+    college_id uuid NOT NULL,
+    id uuid NOT NULL,
+    domain character varying(255) NOT NULL
 );
 
-COMMENT ON CONSTRAINT uq_club_name_per_college ON clubs
-    IS 'Club names are unique within a tenant, not globally.';
 
--- ── 4. EVENTS ────────────────────────────────────────────────
-CREATE TABLE events (
-    event_id              UUID          NOT NULL DEFAULT gen_random_uuid(),
-    club_id               UUID          NOT NULL,
-    college_id            UUID          NOT NULL,  -- denormalized for fast tenant filtering
-    title                 VARCHAR(255)  NOT NULL,
-    description           TEXT,
-    venue                 VARCHAR(255)  NOT NULL,
-    event_date            TIMESTAMPTZ   NOT NULL,
-    registration_deadline TIMESTAMPTZ   NOT NULL,
-    max_capacity          INT           NOT NULL CHECK (max_capacity > 0),
-    status                VARCHAR(30)   NOT NULL DEFAULT 'DRAFT'
-                          CHECK (status IN ('DRAFT','PUBLISHED','REGISTRATION_CLOSED',
-                                            'COMPLETED','CANCELLED')),
-    poster_url            TEXT,
-    category              VARCHAR(100),
-    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+--
+-- Name: colleges; Type: TABLE; Schema: public; Owner: -
+--
 
-    CONSTRAINT pk_events              PRIMARY KEY (event_id),
-    CONSTRAINT fk_events_club         FOREIGN KEY (club_id)
-                                      REFERENCES  clubs (club_id)
-                                      ON DELETE   CASCADE,
-    CONSTRAINT fk_events_college      FOREIGN KEY (college_id)
-                                      REFERENCES  colleges (college_id)
-                                      ON DELETE   CASCADE
+CREATE TABLE public.colleges (
+    is_active boolean NOT NULL,
+    created_at timestamp(6) without time zone,
+    updated_at timestamp(6) without time zone,
+    college_id uuid NOT NULL,
+    logo_url character varying(255),
+    name character varying(255) NOT NULL
 );
 
-COMMENT ON COLUMN events.college_id
-    IS 'Denormalized FK — avoids events→clubs→college join on the most-queried table.';
 
--- ── 5. REGISTRATIONS ─────────────────────────────────────────
-CREATE TABLE registrations (
-    registration_id UUID          NOT NULL DEFAULT gen_random_uuid(),
-    user_id         UUID          NOT NULL,
-    event_id        UUID          NOT NULL,
-    qr_code         VARCHAR(255)  NOT NULL,   -- UUID v4 token, globally unique
-    registered_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    is_cancelled    BOOLEAN       NOT NULL DEFAULT FALSE,
-    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+--
+-- Name: events; Type: TABLE; Schema: public; Owner: -
+--
 
-    CONSTRAINT pk_registrations           PRIMARY KEY (registration_id),
-    CONSTRAINT uq_registrations_qr_code   UNIQUE      (qr_code),
-    CONSTRAINT uq_user_event_registration UNIQUE      (user_id, event_id),
-    CONSTRAINT fk_registrations_user      FOREIGN KEY (user_id)
-                                          REFERENCES  users (user_id)
-                                          ON DELETE   CASCADE,
-    CONSTRAINT fk_registrations_event     FOREIGN KEY (event_id)
-                                          REFERENCES  events (event_id)
-                                          ON DELETE   CASCADE
+CREATE TABLE public.events (
+    is_open_to_all boolean NOT NULL,
+    max_capacity integer NOT NULL,
+    created_at timestamp(6) without time zone,
+    event_date timestamp(6) without time zone NOT NULL,
+    registration_deadline timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone,
+    club_id uuid NOT NULL,
+    college_id uuid NOT NULL,
+    event_id uuid NOT NULL,
+    category character varying(255),
+    description text,
+    poster_url character varying(255),
+    rejection_reason text,
+    status character varying(255) NOT NULL,
+    title character varying(255) NOT NULL,
+    venue character varying(255) NOT NULL,
+    CONSTRAINT events_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING_APPROVAL'::character varying, 'PUBLISHED'::character varying, 'REJECTED'::character varying, 'REGISTRATION_CLOSED'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
-COMMENT ON CONSTRAINT uq_user_event_registration ON registrations
-    IS 'Prevents duplicate registration by the same student for the same event.';
 
--- ── 6. ATTENDANCE ─────────────────────────────────────────────
-CREATE TABLE attendance (
-    attendance_id   UUID          NOT NULL DEFAULT gen_random_uuid(),
-    registration_id UUID          NOT NULL,
-    scanned_by      UUID          NOT NULL,   -- Club Admin user_id
-    scanned_at      TIMESTAMPTZ   NOT NULL,
-    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+--
+-- Name: registrations; Type: TABLE; Schema: public; Owner: -
+--
 
-    CONSTRAINT pk_attendance               PRIMARY KEY (attendance_id),
-    CONSTRAINT uq_attendance_registration  UNIQUE      (registration_id),  -- no duplicate scans
-    CONSTRAINT fk_attendance_registration  FOREIGN KEY (registration_id)
-                                           REFERENCES  registrations (registration_id)
-                                           ON DELETE   CASCADE,
-    CONSTRAINT fk_attendance_scanned_by    FOREIGN KEY (scanned_by)
-                                           REFERENCES  users (user_id)
-                                           ON DELETE   RESTRICT
+CREATE TABLE public.registrations (
+    is_cancelled boolean NOT NULL,
+    created_at timestamp(6) without time zone,
+    registered_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone,
+    event_id uuid NOT NULL,
+    registration_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    qr_code character varying(255) NOT NULL
 );
 
-COMMENT ON CONSTRAINT uq_attendance_registration ON attendance
-    IS 'Enforces single attendance record per registration — prevents duplicate QR scans at DB level.';
 
--- ── 7. INDEXES ───────────────────────────────────────────────
--- Tenant resolution at login (hot path)
-CREATE INDEX idx_colleges_domain           ON colleges       (domain);
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
 
--- Tenant-scoped event browsing (most frequent query)
-CREATE INDEX idx_events_college_status     ON events         (college_id, status);
-CREATE INDEX idx_events_college_date       ON events         (college_id, event_date);
+CREATE TABLE public.users (
+    profile_complete boolean NOT NULL,
+    year smallint,
+    created_at timestamp(6) without time zone,
+    updated_at timestamp(6) without time zone,
+    phone_number character varying(15),
+    college_id uuid,
+    user_id uuid NOT NULL,
+    registration_number character varying(50),
+    stream character varying(100),
+    email character varying(255) NOT NULL,
+    full_name character varying(255) NOT NULL,
+    google_sub character varying(255),
+    picture_url character varying(255),
+    role character varying(255) NOT NULL,
+    refresh_token character varying(512),
+    CONSTRAINT users_role_check CHECK (((role)::text = ANY ((ARRAY['STUDENT'::character varying, 'CLUB_ADMIN'::character varying, 'COLLEGE_ADMIN'::character varying, 'PLATFORM_OWNER'::character varying])::text[])))
+);
 
--- Student's own registrations
-CREATE INDEX idx_registrations_user_id     ON registrations  (user_id);
--- Participant list for an event
-CREATE INDEX idx_registrations_event_id    ON registrations  (event_id);
--- QR scan lookup
-CREATE INDEX idx_registrations_qr_code     ON registrations  (qr_code);
 
--- Attendance report per event (traverses via registration)
-CREATE INDEX idx_attendance_registration   ON attendance     (registration_id);
+--
+-- Name: attendance attendance_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- User lookup by google_sub (OAuth2 login, after domain check)
-CREATE INDEX idx_users_google_sub          ON users          (google_sub);
-CREATE INDEX idx_users_college_id          ON users          (college_id);
+ALTER TABLE ONLY public.attendance
+    ADD CONSTRAINT attendance_pkey PRIMARY KEY (attendance_id);
 
--- ── 8. updated_at auto-trigger ────────────────────────────────
--- Automatically keeps updated_at current without relying solely on JPA
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$;
 
-CREATE TRIGGER trg_colleges_updated_at
-    BEFORE UPDATE ON colleges
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+--
+-- Name: attendance attendance_registration_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
-CREATE TRIGGER trg_users_updated_at
-    BEFORE UPDATE ON users
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+ALTER TABLE ONLY public.attendance
+    ADD CONSTRAINT attendance_registration_id_key UNIQUE (registration_id);
 
-CREATE TRIGGER trg_clubs_updated_at
-    BEFORE UPDATE ON clubs
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER trg_events_updated_at
-    BEFORE UPDATE ON events
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+--
+-- Name: clubs clubs_managed_by_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
-CREATE TRIGGER trg_registrations_updated_at
-    BEFORE UPDATE ON registrations
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+ALTER TABLE ONLY public.clubs
+    ADD CONSTRAINT clubs_managed_by_key UNIQUE (managed_by);
 
-CREATE TRIGGER trg_attendance_updated_at
-    BEFORE UPDATE ON attendance
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+--
+-- Name: clubs clubs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clubs
+    ADD CONSTRAINT clubs_pkey PRIMARY KEY (club_id);
+
+
+--
+-- Name: college_domains college_domains_domain_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.college_domains
+    ADD CONSTRAINT college_domains_domain_key UNIQUE (domain);
+
+
+--
+-- Name: college_domains college_domains_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.college_domains
+    ADD CONSTRAINT college_domains_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: colleges colleges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colleges
+    ADD CONSTRAINT colleges_pkey PRIMARY KEY (college_id);
+
+
+--
+-- Name: events events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.events
+    ADD CONSTRAINT events_pkey PRIMARY KEY (event_id);
+
+
+--
+-- Name: registrations registrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registrations
+    ADD CONSTRAINT registrations_pkey PRIMARY KEY (registration_id);
+
+
+--
+-- Name: registrations registrations_qr_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registrations
+    ADD CONSTRAINT registrations_qr_code_key UNIQUE (qr_code);
+
+
+--
+-- Name: clubs uq_club_name_per_college; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clubs
+    ADD CONSTRAINT uq_club_name_per_college UNIQUE (college_id, name);
+
+
+--
+-- Name: registrations uq_user_event_registration; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registrations
+    ADD CONSTRAINT uq_user_event_registration UNIQUE (user_id, event_id);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_google_sub_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_google_sub_key UNIQUE (google_sub);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: uq_colleges_name_upper; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_colleges_name_upper ON public.colleges USING btree (upper(TRIM(BOTH FROM name)));
+
+
+--
+-- Name: events fk3g7eqy9h9kov3icbumnqmjsj3; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.events
+    ADD CONSTRAINT fk3g7eqy9h9kov3icbumnqmjsj3 FOREIGN KEY (college_id) REFERENCES public.colleges(college_id);
+
+
+--
+-- Name: registrations fk8mi58jt1s8fxmi56jnau0cxqw; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registrations
+    ADD CONSTRAINT fk8mi58jt1s8fxmi56jnau0cxqw FOREIGN KEY (event_id) REFERENCES public.events(event_id);
+
+
+--
+-- Name: attendance fkaxkovcn7kl3pu8qlm0fim0ntu; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance
+    ADD CONSTRAINT fkaxkovcn7kl3pu8qlm0fim0ntu FOREIGN KEY (scanned_by) REFERENCES public.users(user_id);
+
+
+--
+-- Name: college_domains fkiafw37kvfk1cs7agy84htkofi; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.college_domains
+    ADD CONSTRAINT fkiafw37kvfk1cs7agy84htkofi FOREIGN KEY (college_id) REFERENCES public.colleges(college_id);
+
+
+--
+-- Name: registrations fkl2iby9n9hp8jwkfj8i96pkxpi; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registrations
+    ADD CONSTRAINT fkl2iby9n9hp8jwkfj8i96pkxpi FOREIGN KEY (user_id) REFERENCES public.users(user_id);
+
+
+--
+-- Name: attendance fkmlk88rqdy5jyf5ckxmmpm00vf; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance
+    ADD CONSTRAINT fkmlk88rqdy5jyf5ckxmmpm00vf FOREIGN KEY (registration_id) REFERENCES public.registrations(registration_id);
+
+
+--
+-- Name: events fkmt9rjn9hbh6g8isda7c1g14bd; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.events
+    ADD CONSTRAINT fkmt9rjn9hbh6g8isda7c1g14bd FOREIGN KEY (club_id) REFERENCES public.clubs(club_id);
+
+
+--
+-- Name: clubs fknbky87kgk4ayi8e8vpjht6m6j; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clubs
+    ADD CONSTRAINT fknbky87kgk4ayi8e8vpjht6m6j FOREIGN KEY (college_id) REFERENCES public.colleges(college_id);
+
+
+--
+-- Name: users fkq8c77pl7fllv195wbwqn13375; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT fkq8c77pl7fllv195wbwqn13375 FOREIGN KEY (college_id) REFERENCES public.colleges(college_id);
+
+
+--
+-- Name: clubs fksp8dayqfsibg1k08k5gb385oo; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clubs
+    ADD CONSTRAINT fksp8dayqfsibg1k08k5gb385oo FOREIGN KEY (managed_by) REFERENCES public.users(user_id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict Kg7ICsGvnm3tg4uKyhFMTWhBNr5VsjafqBBHuh3moDhPvmviEFloI9BWVtM8Y8Q
+
