@@ -153,7 +153,6 @@ public class EmailService {
             // Log instead of throwing — async exceptions are swallowed anyway
             // Replace with your logger if you have one
             System.err.println("Failed to send registration email: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 }

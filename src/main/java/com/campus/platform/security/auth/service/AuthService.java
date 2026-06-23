@@ -25,11 +25,19 @@ public class AuthService {
     public AuthResponseDto refresh(String refreshToken) {
 
         log.info("=== REFRESH CALLED ===");
-        log.info("Received refreshToken: {}",
-                refreshToken != null ? refreshToken.substring(0, 20) + "..." : "NULL");
+
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Refresh token missing");
+        }
+
+        log.info("Refresh token length: {}", refreshToken.length());
+
         if (!jwtTokenProvider.validateRefreshToken(refreshToken)) {
             throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid or expired refresh token");
         }
 
         UUID userId = jwtTokenProvider.extractUserIdFromRefreshToken(refreshToken);
@@ -43,11 +51,14 @@ public class AuthService {
                     HttpStatus.UNAUTHORIZED, "Refresh token mismatch");
         }
 
+        var college = user.getCollege();
+        UUID collegeId = college != null ? college.getCollegeId() : null;
+
         String newAccessToken = jwtTokenProvider.generateToken(
                 user.getUserId(),
                 user.getEmail(),
-                user.getRole(),         // ← fresh role from DB
-                user.getCollege() != null ? user.getCollege().getCollegeId() : null
+                user.getRole(),
+                collegeId
         );
 
         log.info("Access token refreshed — userId: {}, role: {}", user.getUserId(), user.getRole());
@@ -57,8 +68,7 @@ public class AuthService {
                 .userId(user.getUserId().toString())
                 .email(user.getEmail())
                 .role(user.getRole().name())
-                .collegeId(user.getCollege() != null
-                        ? user.getCollege().getCollegeId().toString() : null)
+                .collegeId(collegeId != null ? collegeId.toString() : null)
                 .build();
     }
 

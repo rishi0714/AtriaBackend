@@ -6,6 +6,7 @@ import com.campus.platform.security.oauth2.CustomOidcUserService;
 import com.campus.platform.security.oauth2.OAuth2AuthenticationFailureHandler;
 import com.campus.platform.security.oauth2.OAuth2AuthenticationSuccessHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -34,35 +35,53 @@ public class SecurityConfig {
     private final OAuth2AuthenticationSuccessHandler successHandler;
     private final OAuth2AuthenticationFailureHandler failureHandler;
 
+    @Value("${FRONTEND_URL:http://localhost:5173}")
+    private String frontendUrl;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+                .cors(cors ->
+                        cors.configurationSource(corsConfigurationSource())
+                )
 
                 .authorizeHttpRequests(auth -> auth
+
                         .requestMatchers(
                                 "/oauth2/**",
                                 "/login/oauth2/**"
                         ).permitAll()
+
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
+
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/api/auth/refresh", "/api/auth/logout").permitAll()
+
+                        .requestMatchers(
+                                "/api/auth/refresh",
+                                "/api/auth/logout"
+                        ).permitAll()
+
                         .requestMatchers("/api/**").authenticated()
+
                         .anyRequest().authenticated()
                 )
 
                 .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(auth -> auth
-                                .authorizationRequestRepository(
-                                        new HttpSessionOAuth2AuthorizationRequestRepository())
+                        .authorizationEndpoint(auth ->
+                                auth.authorizationRequestRepository(
+                                        new HttpSessionOAuth2AuthorizationRequestRepository()
+                                )
                         )
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService)
@@ -72,23 +91,38 @@ public class SecurityConfig {
                         .failureHandler(failureHandler)
                 )
 
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                )
 
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(401);
                             response.setContentType("application/json");
                             response.getWriter().write(
-                                    "{\"status\":401,\"title\":\"Unauthorized\"," +
-                                            "\"detail\":\"Authentication required.\"}");
+                                    """
+                                    {
+                                      "status":401,
+                                      "title":"Unauthorized",
+                                      "detail":"Authentication required."
+                                    }
+                                    """
+                            );
                         })
+
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(403);
                             response.setContentType("application/json");
                             response.getWriter().write(
-                                    "{\"status\":403,\"title\":\"Forbidden\"," +
-                                            "\"detail\":\"Insufficient role or wrong tenant.\"}");
+                                    """
+                                    {
+                                      "status":403,
+                                      "title":"Forbidden",
+                                      "detail":"Insufficient role or wrong tenant."
+                                    }
+                                    """
+                            );
                         })
                 );
 
@@ -97,21 +131,36 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://192.168.0.141:5173",
-                "https://outspoken-uphill-zone.ngrok-free.dev",
-                "https://molehill-humid-unstirred.ngrok-free.dev"
+
+        config.setAllowedOriginPatterns(List.of(frontendUrl));
+
+        config.setAllowedMethods(List.of(
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "OPTIONS"
         ));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Refresh-Token"));
+
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "X-Refresh-Token"
+        ));
+
         config.setAllowCredentials(true);
+
         config.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 }

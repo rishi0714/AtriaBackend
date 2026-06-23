@@ -52,21 +52,21 @@ public class ClubService {
 
     @Transactional
     public ClubResponseDto assignClubAdmin(UUID clubId, String email, UUID collegeId) {
+
         Club club = findClubInTenantOrThrow(clubId, collegeId);
-
-        // demote previous manager if they no longer manage any club after this
         User previous = club.getManagedBy();
-
         User newAdmin = resolveAndPromoteClubAdmin(email, collegeId);
+        club.setManagedBy(newAdmin);
+        Club savedClub = clubRepository.save(club);
 
-        // don't demote if same user is being reassigned
-        if (previous != null && !previous.getUserId().equals(newAdmin.getUserId())) {
+        if (previous != null &&
+                !previous.getUserId().equals(newAdmin.getUserId())) {
             demoteIfUnassigned(previous);
         }
 
-        club.setManagedBy(newAdmin);
-        return clubMapper.toResponseDto(clubRepository.save(club));
+        return clubMapper.toResponseDto(savedClub);
     }
+
     @Transactional(readOnly = true)
     public long getClubCountByCollege(UUID collegeId) {
         collegeService.findCollegeOrThrow(collegeId); // optional validation
@@ -78,6 +78,8 @@ public class ClubService {
         Club club = findClubInTenantOrThrow(clubId, collegeId);
         User previous = club.getManagedBy();
         clubRepository.delete(club);
+        clubRepository.flush();
+
         if (previous != null) {
             demoteIfUnassigned(previous);
         }
