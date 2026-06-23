@@ -20,12 +20,14 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -43,8 +45,10 @@ class RegistrationServiceTest {
     @Mock AttendanceRepository attendanceRepository;
     @Mock EmailService emailService;
 
+    // ← real fixed clock instead of @Mock
+    private final Clock clock = Clock.fixed(Instant.now(), ZoneOffset.UTC);
 
-    @InjectMocks RegistrationService registrationService;
+    private RegistrationService registrationService;
 
     private UUID userId;
     private UUID eventId;
@@ -55,8 +59,18 @@ class RegistrationServiceTest {
 
     @BeforeEach
     void setUp() {
+        // ← manually construct so the real clock is injected
+        registrationService = new RegistrationService(
+                registrationRepository,
+                registrationMapper,
+                userService,
+                eventService,
+                attendanceRepository,
+                emailService,
+                clock
+        );
 
-        userId = UUID.randomUUID();
+        userId  = UUID.randomUUID();
         eventId = UUID.randomUUID();
 
         college = College.builder()
@@ -77,8 +91,8 @@ class RegistrationServiceTest {
                 .college(college)
                 .title("Hackathon")
                 .status(EventStatus.PUBLISHED)
-                .eventDate(LocalDateTime.now().plusDays(10))
-                .registrationDeadline(LocalDateTime.now().plusDays(5))
+                .eventDate(LocalDateTime.now(clock).plusDays(10))         // ← fixed
+                .registrationDeadline(LocalDateTime.now(clock).plusDays(5)) // ← fixed
                 .maxCapacity(50)
                 .isOpenToAll(false)
                 .build();
@@ -112,37 +126,29 @@ class RegistrationServiceTest {
                     .user(student)
                     .event(event)
                     .qrCode(UUID.randomUUID().toString())
-                    .registeredAt(LocalDateTime.now())
+                    .registeredAt(LocalDateTime.now(clock))  // ← fixed
                     .isCancelled(false)
                     .build();
 
             when(registrationRepository.save(any()))
                     .thenReturn(saved);
 
-            RegistrationResponseDto response =
-                    new RegistrationResponseDto();
-
             when(registrationMapper.toResponseDto(saved))
-                    .thenReturn(response);
+                    .thenReturn(new RegistrationResponseDto());
 
-            // ACT
             RegistrationResponseDto result =
                     registrationService.registerForEvent(userId, eventId);
 
-            // ASSERT
             assertThat(result).isNotNull();
 
             ArgumentCaptor<Registration> captor =
                     ArgumentCaptor.forClass(Registration.class);
 
-            verify(registrationRepository)
-                    .save(captor.capture());
+            verify(registrationRepository).save(captor.capture());
 
-            assertThat(captor.getValue().getQrCode())
-                    .isNotBlank();
+            assertThat(captor.getValue().getQrCode()).isNotBlank();
 
-            verify(emailService)
-                    .sendRegistrationEmail(any(UUID.class));
+            verify(emailService).sendRegistrationEmail(any(UUID.class));
         }
 
         @Test
@@ -165,8 +171,7 @@ class RegistrationServiceTest {
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("already registered");
 
-            verify(registrationRepository, never())
-                    .save(any());
+            verify(registrationRepository, never()).save(any());
         }
 
         @Test
@@ -217,7 +222,7 @@ class RegistrationServiceTest {
         void deadlinePassed() {
 
             event.setRegistrationDeadline(
-                    LocalDateTime.now().minusHours(1));
+                    LocalDateTime.now(clock).minusHours(1));  // ← fixed
 
             when(userService.findUserOrThrow(userId))
                     .thenReturn(student);

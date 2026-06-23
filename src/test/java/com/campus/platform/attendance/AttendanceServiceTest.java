@@ -21,12 +21,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -55,7 +57,9 @@ class AttendanceServiceTest {
     @Mock
     private EventService eventService;
 
-    @InjectMocks
+    // ← real fixed clock instead of @Mock — avoids null ZoneId issue
+    private final Clock clock = Clock.fixed(Instant.now(), ZoneOffset.UTC);
+
     private AttendanceService attendanceService;
 
     private UUID collegeId;
@@ -70,9 +74,19 @@ class AttendanceServiceTest {
 
     @BeforeEach
     void setUp() {
+        // manually construct since we're no longer using @InjectMocks
+        attendanceService = new AttendanceService(
+                attendanceRepository,
+                attendanceMapper,
+                registrationService,
+                userService,
+                registrationRepository,
+                eventService,
+                clock
+        );
 
-        collegeId = UUID.randomUUID();
-        eventId = UUID.randomUUID();
+        collegeId     = UUID.randomUUID();
+        eventId       = UUID.randomUUID();
         scannerUserId = UUID.randomUUID();
 
         college = College.builder()
@@ -107,7 +121,7 @@ class AttendanceServiceTest {
                 .user(student)
                 .event(event)
                 .qrCode("valid-qr-token")
-                .registeredAt(LocalDateTime.now().minusDays(1))
+                .registeredAt(LocalDateTime.now(clock).minusDays(1))
                 .isCancelled(false)
                 .build();
 
@@ -139,7 +153,7 @@ class AttendanceServiceTest {
                     .attendanceId(UUID.randomUUID())
                     .registration(registration)
                     .scannedBy(scanner)
-                    .scannedAt(LocalDateTime.now())
+                    .scannedAt(LocalDateTime.now(clock))
                     .build();
 
             when(attendanceRepository.save(any(Attendance.class)))
@@ -149,15 +163,10 @@ class AttendanceServiceTest {
                     .thenReturn(new AttendanceResponseDto());
 
             AttendanceResponseDto result =
-                    attendanceService.scanQrCode(
-                            dto,
-                            collegeId,
-                            scannerUserId);
+                    attendanceService.scanQrCode(dto, collegeId, scannerUserId);
 
             assertThat(result).isNotNull();
-
-            verify(attendanceRepository)
-                    .save(any(Attendance.class));
+            verify(attendanceRepository).save(any(Attendance.class));
         }
 
         @Test
@@ -172,15 +181,11 @@ class AttendanceServiceTest {
                     .thenReturn(true);
 
             assertThatThrownBy(() ->
-                    attendanceService.scanQrCode(
-                            dto,
-                            collegeId,
-                            scannerUserId))
+                    attendanceService.scanQrCode(dto, collegeId, scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("already marked");
 
-            verify(attendanceRepository, never())
-                    .save(any());
+            verify(attendanceRepository, never()).save(any());
         }
 
         @Test
@@ -193,18 +198,11 @@ class AttendanceServiceTest {
                     .thenReturn(registration);
 
             assertThatThrownBy(() ->
-                    attendanceService.scanQrCode(
-                            dto,
-                            otherCollegeId,
-                            scannerUserId))
+                    attendanceService.scanQrCode(dto, otherCollegeId, scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
-                    .satisfies(ex -> {
-                        ResponseStatusException rse =
-                                (ResponseStatusException) ex;
-
-                        assertThat(rse.getStatusCode().value())
-                                .isEqualTo(403);
-                    });
+                    .satisfies(ex -> assertThat(
+                            ((ResponseStatusException) ex).getStatusCode().value())
+                            .isEqualTo(403));
         }
 
         @Test
@@ -217,10 +215,7 @@ class AttendanceServiceTest {
                     .thenReturn(registration);
 
             assertThatThrownBy(() ->
-                    attendanceService.scanQrCode(
-                            dto,
-                            collegeId,
-                            scannerUserId))
+                    attendanceService.scanQrCode(dto, collegeId, scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("different event");
         }
@@ -235,10 +230,7 @@ class AttendanceServiceTest {
                     .thenReturn(registration);
 
             assertThatThrownBy(() ->
-                    attendanceService.scanQrCode(
-                            dto,
-                            collegeId,
-                            scannerUserId))
+                    attendanceService.scanQrCode(dto, collegeId, scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("cancelled");
         }
@@ -253,10 +245,7 @@ class AttendanceServiceTest {
                     .thenReturn(registration);
 
             assertThatThrownBy(() ->
-                    attendanceService.scanQrCode(
-                            dto,
-                            collegeId,
-                            scannerUserId))
+                    attendanceService.scanQrCode(dto, collegeId, scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("not published");
         }
@@ -271,10 +260,7 @@ class AttendanceServiceTest {
                     .thenReturn(registration);
 
             assertThatThrownBy(() ->
-                    attendanceService.scanQrCode(
-                            dto,
-                            collegeId,
-                            scannerUserId))
+                    attendanceService.scanQrCode(dto, collegeId, scannerUserId))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("not published");
         }
