@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,14 +19,14 @@ import java.util.List;
 public class EventScheduler {
 
     private final EventRepository eventRepository;
+    private final Clock clock;  // ← inject clock
 
-    // Runs every 5 minutes
     @Scheduled(fixedRate = 300_000)
     @Transactional
     public void autoCloseRegistrations() {
         List<Event> events = eventRepository
                 .findAllByStatusAndRegistrationDeadlineBefore(
-                        EventStatus.PUBLISHED, LocalDateTime.now());
+                        EventStatus.PUBLISHED, LocalDateTime.now(clock));  // ← fixed
         events.forEach(e -> e.setStatus(EventStatus.REGISTRATION_CLOSED));
         eventRepository.saveAll(events);
         if (!events.isEmpty()) {
@@ -38,8 +39,7 @@ public class EventScheduler {
     public void autoCompleteEvents() {
         List<Event> events = eventRepository
                 .findAllByStatusAndEventDateBefore(
-                        EventStatus.REGISTRATION_CLOSED, LocalDateTime.now());
-        events.forEach(e -> e.setStatus(EventStatus.COMPLETED));
+                        EventStatus.REGISTRATION_CLOSED, LocalDateTime.now(clock));  // ← fixed
         eventRepository.saveAll(events);
         if (!events.isEmpty()) {
             log.info("Auto-completed {} events", events.size());

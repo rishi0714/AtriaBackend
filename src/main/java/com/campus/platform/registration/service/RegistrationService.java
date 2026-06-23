@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -35,6 +36,7 @@ public class RegistrationService {
     private final EventService eventService;
     private final AttendanceRepository attendanceRepository;
     private final EmailService emailService;
+    private final Clock clock;  // ← inject clock
 
     @Transactional
     public RegistrationResponseDto registerForEvent(UUID userId, UUID eventId) {
@@ -55,14 +57,14 @@ public class RegistrationService {
                 .map(existing -> {
                     existing.setCancelled(false);
                     existing.setQrCode(UUID.randomUUID().toString());
-                    existing.setRegisteredAt(LocalDateTime.now());
+                    existing.setRegisteredAt(LocalDateTime.now(clock));  // ← fixed
                     return existing;
                 })
                 .orElseGet(() -> Registration.builder()
                         .user(user)
                         .event(event)
                         .qrCode(UUID.randomUUID().toString())
-                        .registeredAt(LocalDateTime.now())
+                        .registeredAt(LocalDateTime.now(clock))  // ← fixed
                         .isCancelled(false)
                         .build());
 
@@ -71,7 +73,6 @@ public class RegistrationService {
         UUID savedId = saved.getRegistrationId();
 
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
-
             TransactionSynchronizationManager.registerSynchronization(
                     new TransactionSynchronization() {
                         @Override
@@ -80,7 +81,6 @@ public class RegistrationService {
                         }
                     }
             );
-
         } else {
             emailService.sendRegistrationEmail(savedId);
         }
@@ -95,7 +95,7 @@ public class RegistrationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Registration not found or does not belong to this user."));
 
-        if (registration.getEvent().getEventDate().isBefore(LocalDateTime.now())) {
+        if (registration.getEvent().getEventDate().isBefore(LocalDateTime.now(clock))) {  // ← fixed
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Cannot cancel a registration after the event has occurred.");
         }
@@ -111,7 +111,7 @@ public class RegistrationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Registration not found."));
 
-        if (registration.getEvent().getEventDate().isBefore(LocalDateTime.now())) {
+        if (registration.getEvent().getEventDate().isBefore(LocalDateTime.now(clock))) {  // ← fixed
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Cannot cancel after event has occurred.");
         }
@@ -133,7 +133,7 @@ public class RegistrationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Event is not open for registration.");
         }
-        if (event.getRegistrationDeadline().isBefore(LocalDateTime.now())) {
+        if (event.getRegistrationDeadline().isBefore(LocalDateTime.now(clock))) {  // ← fixed
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Registration deadline has passed.");
         }
@@ -171,8 +171,6 @@ public class RegistrationService {
 
     @Transactional(readOnly = true)
     public List<RegistrationResponseDto> getParticipantsForEvent(UUID eventId) {
-
-        // one query instead of two separate ones
         List<Registration> registrations = registrationRepository
                 .findParticipantsWithDetails(eventId);
 

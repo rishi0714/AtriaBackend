@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +33,8 @@ public class AttendanceService {
     private final UserService userService;
     private final RegistrationRepository registrationRepository;
     private final EventService eventService; // ← add for tenant checks
+    private final Clock clock;
+
 
     /**
      * Validates QR code and marks attendance.
@@ -78,7 +81,7 @@ public class AttendanceService {
         Attendance attendance = Attendance.builder()
                 .registration(registration)
                 .scannedBy(scanner)
-                .scannedAt(LocalDateTime.now())
+                .scannedAt(LocalDateTime.now(clock))  // ← was .now()
                 .build();
 
         return attendanceMapper.toResponseDto(attendanceRepository.save(attendance));
@@ -120,7 +123,7 @@ public class AttendanceService {
         Attendance attendance = Attendance.builder()
                 .registration(registration)
                 .scannedBy(scanner)
-                .scannedAt(LocalDateTime.now())
+                .scannedAt(LocalDateTime.now(clock))  // ← was .now()
                 .build();
 
         return attendanceMapper.toResponseDto(attendanceRepository.save(attendance));

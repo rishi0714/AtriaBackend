@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import jakarta.validation.Valid;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +33,7 @@ public class StudentController {
     private final ClubService clubService;
     private final RegistrationService registrationService;
     private final AttendanceRepository attendanceRepository;
+    private final Clock clock;  // ← inject clock
 
     @GetMapping("/profile")
     @PreAuthorize("hasRole('STUDENT')")
@@ -46,9 +48,11 @@ public class StudentController {
         UUID userId = SecurityContextUtil.currentUserId();
         List<RegistrationResponseDto> raw = registrationService.getMyRegistrations(userId);
 
+        LocalDateTime now = LocalDateTime.now(clock);  // ← fixed, extracted once
+
         List<StudentRegistrationDto> result = raw.stream().map(r -> {
             boolean isPast = r.getEventDate() != null &&
-                    r.getEventDate().isBefore(LocalDateTime.now());
+                    r.getEventDate().isBefore(now);
 
             return StudentRegistrationDto.builder()
                     .id(r.getRegistrationId())
