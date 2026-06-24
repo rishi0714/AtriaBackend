@@ -37,7 +37,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
 
-    @Value("${app.oauth2.redirect-uri:}")
+    @Value("${FRONTEND_CALLBACK_URL:}")
     private String frontendRedirectUri;
 
     @Override
